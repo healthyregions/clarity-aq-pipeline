@@ -39,6 +39,18 @@ Draft workflow pipeline:
 ## Early Testing
 You can run this script with either Python or Docker
 
+Clone this repo to get started:
+```bash
+git clone https://github.com/healthyregions/clarity-aq-pipeline
+cd clarity-aq-pipeline/
+```
+
+Then create a copy of `.env.example` to set your API KEY:
+```bash
+cp .env.example .env
+vi .env
+```
+
 ### Python (Local Development)
 ```bash
 pip install -r requirements.txt
