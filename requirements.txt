@@ -1,0 +1,2 @@
+clarityio==0.3.0
+pandas==2.3.0

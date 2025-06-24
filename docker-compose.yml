@@ -1,0 +1,7 @@
+services:
+  clarityfetch:
+    image: herop/clarityfetch
+    build:
+      context: .
+    env_file:
+      - .env

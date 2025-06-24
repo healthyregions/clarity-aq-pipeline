@@ -34,3 +34,34 @@ Draft workflow pipeline:
             1. Script/job 1 fetches data from Clarity API, performs cleaning/transformations on it, and writes data to new daily parquet file
             2. Script/job 2 runs sql queries across latest file and past files to generate various
         - A geoparquet file would allow for spatial queries, such as all censor measurements within a certain area of interest
+
+
+## Early Testing
+You can run this script with either Python or Docker
+
+### Python (Local Development)
+```bash
+pip install -r requirements.txt
+python ./fetch-clarity-data.py
+```
+
+### Docker / Compose (Staging)
+Build and run the image in one step:
+```bash
+docker compose run --build clarityfetch
+```
+
+This is equivalent to running the `build` and `run` commands separately:
+```bash
+docker build -t herop/clarityfetch .
+docker run -it herop/clarityfetch
+```
+
+### Future: GitHub Action (Production)
+The production process is run automatically on a schedule, but it can be triggered manually for testing as well.
+
+Navigate to https://github.com/healthyregions/clarity-aq-pipeline/actions/workflows/data-cleanup.yml
+
+From here, you can choose to manually Run the Workflow :+1:
+
+
