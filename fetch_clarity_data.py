@@ -29,7 +29,7 @@ def fetch_metrics():
         'allDatasources': True,
         'outputFrequency': 'hour',
         'format': 'json-long',
-        'startTime': '2024-07-22T00:00:00Z'
+        'startTime': '2025-06-22T00:00:00Z'
     }
     response = api_connection.get_recent_measurements(data=request_body)
     return pd.DataFrame(response['data'])

@@ -38,18 +38,25 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
+      # Fetch Clarity API data and save as CSV
+      - name: Build clarityfetch image (Python)
+        run: docker build -t clarityfetch .
+      - name: Run clarityfetch docker container (Fetch Clarity API data and save as CSV)
+        run: docker run -it --rm -e CLARITY_API_TOKEN=${{ secrets.CLARITY_API_TOKEN }} clarityfetch
+      # TODO: Save as intermediary CSV? Pass dataframe to R?
 
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
-
-      # TODO: Read Clarity API token from secret
-      # TODO: Fetch data from Clarity API using secret token
       # TODO: decide which metrics are important to preserve/display
+
       # TODO: Run data cleanup, QA/QI, postprocessing, etc
+      - name: Build claritydatacleanup image (R?)
+        run: docker build -t claritydatacleanup -f Dockerfile.datacleanup .
+      - name: Run claritydatacleanup docker container (Run data cleanup / postprocessing on Clarity CSV data)
+        run: docker run -it --rm claritydatacleanup .
+
+      # TODO: Store cleaned data somewhere the frontend can fetch it (S3, MinIO, etc)
+
       # ...    ...    ...    ...    ...    ...
+
+      # TODO: implement as post step? see https://github.com/marketplace/actions/run-and-post-run-action
+      - name: Delete clarityfetch + claritydatacleanup images
+        run: docker rmi -f clarityfetch claritydatacleanup
