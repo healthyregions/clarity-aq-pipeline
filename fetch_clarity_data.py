@@ -1,27 +1,15 @@
 import os
 import clarityio
 import pandas as pd
+import sys
+
+RAW_DATA_OUTPUT_PATH = os.getenv('OUTPUT_PATH', '/usr/app/raw.csv')
 
 # Fetch input parameters from envvars
 api_connection = clarityio.ClarityAPIConnection(
     api_key=os.getenv('CLARITY_API_KEY'),
     org=os.getenv('CLARITY_ORG_NAME', 'cityof58A9')
 )
-
-
-def list_datasources():
-    datasources_response = api_connection.get_datasources()
-    return pd.json_normalize(datasources_response['datasources'])
-
-
-def get_datasource_details(datasource_id):
-    source_details_response = api_connection.get_datasource_details(datasource_id)
-    source_details = pd.json_normalize(source_details_response['datasource'])
-
-
-def convert_to_epa_aqi():
-    clarityio.scale_raw_to_aqi('pm2.5_24hr', 18.84)  # 69.14676806083651
-    clarityio.scale_raw_to_aqi('nitrogen_dioxide_1hr', 300)  # 138.64864864864865
 
 
 def fetch_metrics():
@@ -32,13 +20,20 @@ def fetch_metrics():
         'startTime': '2025-06-22T00:00:00Z'
     }
     response = api_connection.get_recent_measurements(data=request_body)
-    return pd.DataFrame(response['data'])
+    if response is not None:
+        return pd.DataFrame(response['data'])
+    else:
+        print('Failed to fetch metrics from Clarity API')
+        sys.exit(1)
 
 
 def main():
     print("Fetching metrics...")
-    df = fetch_metrics()
-    print("Results:", df)
+    metrics = fetch_metrics()
+    print("Metrics fetched:", metrics)
+
+    print(f"Writing to file: {RAW_DATA_OUTPUT_PATH}")
+    metrics.to_csv(RAW_DATA_OUTPUT_PATH, index=False)
 
 
 if __name__ == "__main__":

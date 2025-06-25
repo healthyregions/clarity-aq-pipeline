@@ -42,7 +42,7 @@ jobs:
       - name: Build clarityfetch image (Python)
         run: docker build -t clarityfetch .
       - name: Run clarityfetch docker container (Fetch Clarity API data and save as CSV)
-        run: docker run --rm -e CLARITY_API_TOKEN=${{ secrets.CLARITY_API_TOKEN }} clarityfetch
+        run: docker run --rm -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} clarityfetch
       # TODO: Save as intermediary CSV? Pass dataframe to R?
 
       # TODO: decide which metrics are important to preserve/display
