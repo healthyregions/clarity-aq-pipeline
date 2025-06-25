@@ -3,5 +3,3 @@ services:
     image: herop/clarityfetch
     build:
       context: .
-    env_file:
-      - .env

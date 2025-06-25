@@ -30,7 +30,8 @@ def fetch_metrics():
 def main():
     print("Fetching metrics...")
     metrics = fetch_metrics()
-    print("Metrics fetched:", metrics)
+    print("Metrics fetched:")
+    print(metrics)
 
     print(f"Writing to file: {RAW_DATA_OUTPUT_PATH}")
     metrics.to_csv(RAW_DATA_OUTPUT_PATH, index=False)

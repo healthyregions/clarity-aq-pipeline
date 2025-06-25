@@ -60,7 +60,7 @@ python ./fetch-clarity-data.py
 ### Docker / Compose (Staging)
 Build and run the image in one step:
 ```bash
-docker compose run --build clarityfetch
+docker compose run --env-file .env --build clarityfetch
 ```
 
 This is equivalent to running the `build` and `run` commands separately:
