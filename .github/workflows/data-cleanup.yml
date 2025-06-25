@@ -48,15 +48,15 @@ jobs:
       # TODO: decide which metrics are important to preserve/display
 
       # TODO: Run data cleanup, QA/QI, postprocessing, etc
-      - name: Build claritydatacleanup image (R?)
-        run: docker build -t claritydatacleanup -f Dockerfile.datacleanup .
-      - name: Run claritydatacleanup docker container (Run data cleanup / postprocessing on Clarity CSV data)
-        run: docker run -it --rm claritydatacleanup .
+      #- name: Build claritydatacleanup image (R?)
+      #  run: docker build -t claritydatacleanup -f Dockerfile.datacleanup .
+      #- name: Run claritydatacleanup docker container (Run data cleanup / postprocessing on Clarity CSV data)
+      #  run: docker run -it --rm claritydatacleanup .
 
-      # TODO: Store cleaned data somewhere the frontend can fetch it (S3, MinIO, etc)
+      # TODO: Store cleaned data somewhere the frontend can fetch it (S3, MinIO, Git LFS, etc)
 
       # ...    ...    ...    ...    ...    ...
 
       # TODO: implement as post step? see https://github.com/marketplace/actions/run-and-post-run-action
       - name: Delete clarityfetch + claritydatacleanup images
-        run: docker rmi -f clarityfetch claritydatacleanup
+        run: docker rmi -f clarityfetch
