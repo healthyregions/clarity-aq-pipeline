@@ -6,4 +6,7 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt --no-cache-dir
 COPY . .
 
+# Mount in data volume at runtime
+VOLUME /usr/app/data/
+
 CMD ["python", "./fetch_clarity_data.py"]
