@@ -71,10 +71,19 @@ docker run -it --env-file .env herop/clarityfetch
 ```
 
 ### Future: GitHub Action (Production)
-The production process is run automatically on a schedule, but it can be triggered manually for testing as well.
+The production process will eventually be run automatically on a schedule, but it can be triggered manually for early testing as well.
 
 Navigate to https://github.com/healthyregions/clarity-aq-pipeline/actions/workflows/data-cleanup.yml
 
 From here, you can choose to manually Run the Workflow :+1:
 
+On the right side choose "Run workflow"
+
+You should see a dialog open allowing you to choose which branch to run the workflow on - choose `main` unless you are working on a different branch
+
+After selecting the branch, click the green "Run workflow" button at the button of the dialog
+
+Either refresh the page or wait a few seconds, and you should see a new Run appear in the list :tada:
+
+You can click on this run to drill down and see the progress and log out
 
