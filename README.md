@@ -1,3 +1,4 @@
+:q
 # clarity-aq-pipeline
 
 This repo holds scripts and Github Actions that extract and manipulate air quality sensor data from Clarity's API for aggregated storage and display in TDB web-based visualizations.
@@ -54,7 +55,7 @@ vi .env
 ### Python (Local Development)
 ```bash
 pip install -r requirements.txt
-python ./fetch-clarity-data.py
+python ./fetch_clarity_data.py
 ```
 
 ### Docker / Compose (Staging)
@@ -66,14 +67,23 @@ docker compose run --env-file .env --build clarityfetch
 This is equivalent to running the `build` and `run` commands separately:
 ```bash
 docker build -t herop/clarityfetch .
-docker run -it herop/clarityfetch
+docker run -it --env-file .env herop/clarityfetch
 ```
 
 ### Future: GitHub Action (Production)
-The production process is run automatically on a schedule, but it can be triggered manually for testing as well.
+The production process will eventually be run automatically on a schedule, but it can be triggered manually for early testing as well.
 
 Navigate to https://github.com/healthyregions/clarity-aq-pipeline/actions/workflows/data-cleanup.yml
 
 From here, you can choose to manually Run the Workflow :+1:
 
+On the right side choose "Run workflow"
+
+You should see a dialog open allowing you to choose which branch to run the workflow on - choose `main` unless you are working on a different branch
+
+After selecting the branch, click the green "Run workflow" button at the button of the dialog
+
+Either refresh the page or wait a few seconds, and you should see a new Run appear in the list :tada:
+
+You can click on this run to drill down and see the progress and log out
 
