@@ -1,3 +1,4 @@
+:q
 # clarity-aq-pipeline
 
 This repo holds scripts and Github Actions that extract and manipulate air quality sensor data from Clarity's API for aggregated storage and display in TDB web-based visualizations.
@@ -54,7 +55,7 @@ vi .env
 ### Python (Local Development)
 ```bash
 pip install -r requirements.txt
-python ./fetch-clarity-data.py
+python ./fetch_clarity_data.py
 ```
 
 ### Docker / Compose (Staging)
@@ -66,7 +67,7 @@ docker compose run --env-file .env --build clarityfetch
 This is equivalent to running the `build` and `run` commands separately:
 ```bash
 docker build -t herop/clarityfetch .
-docker run -it herop/clarityfetch
+docker run -it --env-file .env herop/clarityfetch
 ```
 
 ### Future: GitHub Action (Production)
