@@ -1,4 +1,3 @@
-:q
 # clarity-aq-pipeline
 
 This repo holds scripts and Github Actions that extract and manipulate air quality sensor data from Clarity's API for aggregated storage and display in TDB web-based visualizations.
