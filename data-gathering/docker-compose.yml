@@ -1,0 +1,11 @@
+services:
+  gatherdata:
+    image: herop/gatherdata
+    working_dir: /usr/app
+    env_file:
+      - .env
+    build:
+      context: .
+    volumes:
+      - ./data:/usr/app/data
+
