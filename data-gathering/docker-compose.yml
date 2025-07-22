@@ -8,4 +8,5 @@ services:
       context: .
     volumes:
       - .:/usr/app
+      - ./data:/usr/app/data
 

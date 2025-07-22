@@ -1,5 +1,5 @@
 import os
-import pandas
+import pandas as pd
 import sys
 
 
@@ -18,10 +18,10 @@ def col_val_match(row, col_name, match_value):
 
 def read_input_data():
     # Read relevant input files from disk
-    lp_data_df = pandas.read_csv(LP_MASTER_PATH)
-    input_data_df = pandas.read_excel(INPUT_DATA_PATH)
-    # grid_data = pandas.read_csv(GRID_PATH)
-    # candidate_data = pandas.read_csv(CANDIDATE_SENSORS_PATH)
+    lp_data_df = pd.read_csv(LP_MASTER_PATH)
+    input_data_df = pd.read_excel(INPUT_DATA_PATH)
+    # grid_data = pd.read_csv(GRID_PATH)
+    # candidate_data = pd.read_csv(CANDIDATE_SENSORS_PATH)
 
     return input_data_df, lp_data_df
 
@@ -33,10 +33,10 @@ def main():
     print('Input data parsed:')
     print(input_data_df)
 
-    #merged_data_df = pandas.DataFrame()
+    merged_data_df = pd.DataFrame().reindex_like(input_data_df)
 
     # Fill in missing rows from other spreadsheets
-    for _, row in input_data_df.iterrows():
+    for index, row in input_data_df.iterrows():
         # Read attributes from this row
         sensor_id = row['EPA Grid Point ID']
         zip_code = row['Zipcode']
@@ -44,7 +44,7 @@ def main():
         ward_no = row['Ward Number']
 
         # Use attributes to look up priority 1-5 FEATURE_ID. geocode/latlong, and address
-        for priority in range(1, 5):
+        for priority in range(1, 6):
             # Build label names for each priority
             feature_id_col = f'Priority {priority} CDOT Light Pole ID'
             geocode_col = f'Priority {priority} CDOT Light Pole Location Geocode'
@@ -74,18 +74,18 @@ def main():
             row[geocode_col] = match_row['latlong']
             row[address_col] = match_row['Address']
 
-            print(f'Row data has been filled out for {sensor_id}-{priority}')
-            print(row)
+        print(f'Row data has been filled out for {sensor_id}:')
+        print(row)
 
-            #new_row_df = pandas.DataFrame(row)
-            #merged_data_df = pandas.concat([merged_data_df, new_row_df], ignore_index=True)
+        # Add this row back to the merged_data dataframe
+        merged_data_df.loc[index] = row
 
     print(f'Merged data has been compiled!')
-    print(input_data_df)
+    print(merged_data_df)
 
     # Write merged spreadsheet out as a new file
     print(f'Writing merged data to {OUTPUT_PATH}')
-    input_data_df.to_excel(OUTPUT_PATH)
+    merged_data_df.to_excel(OUTPUT_PATH, index=False)
 
     return
 
