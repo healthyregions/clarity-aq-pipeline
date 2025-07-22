@@ -7,5 +7,5 @@ services:
     build:
       context: .
     volumes:
-      - ./data:/usr/app/data
+      - .:/usr/app
 

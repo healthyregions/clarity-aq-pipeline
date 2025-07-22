@@ -8,31 +8,7 @@ LP_MASTER_PATH = os.getenv('LP_MASTER_PATH', 'data/cleaned/LightPostMaster_Clean
 GRID_PATH = os.getenv('GRID_PATH', './data/cleaned/GridMaster.csv')
 CANDIDATE_SENSORS_PATH = os.getenv('CANDIDATE_SENSORS_PATH', './data/cleaned/CandidateSensorswUID.csv')
 INPUT_DATA_PATH = os.getenv('INPUT_DATA_PATH', './data/no-community-input.xlsx')
-
 OUTPUT_PATH = os.getenv('OUTPUT_PATH', './data/merged-no-community-input.xlsx')
-
-# Read all input files from disk
-lp_data = pandas.read_csv(LP_MASTER_PATH)
-#grid_data = pandas.read_csv(GRID_PATH)
-#candidate_data = pandas.read_csv(CANDIDATE_SENSORS_PATH)
-input_data = pandas.read_excel(INPUT_DATA_PATH)
-
-
-
-
-# Given a pandas dataframe, search for the row matching the predicate
-#    -If col_name is given, return the row cell value for this column
-#    -If no col_name is given, the entire row is returned
-def lookup_value(df, predicate, src_col_name, target_col_name=None):
-    for row in df:
-        match_value = row[src_col_name]
-
-        # If col_name given, return the cell
-        # If no col_name given, return the whole row
-        if predicate(row=row, col_name=src_col_name, match_value=match_value):
-            return row[target_col_name] if target_col_name is not None else row
-
-    return None
 
 
 # Given a row, this function will return True if the chosen column in that row matches the value
@@ -40,16 +16,32 @@ def col_val_match(row, col_name, match_value):
     return row[col_name] == match_value
 
 
+def read_input_data():
+    # Read relevant input files from disk
+    lp_data_df = pandas.read_csv(LP_MASTER_PATH)
+    input_data_df = pandas.read_excel(INPUT_DATA_PATH)
+    # grid_data = pandas.read_csv(GRID_PATH)
+    # candidate_data = pandas.read_csv(CANDIDATE_SENSORS_PATH)
+
+    return input_data_df, lp_data_df
+
+
 def main():
-    lookup_value(input_data, col_val_match, 'col_name')
+    print('Parsing input data...')
+    input_data_df, lp_data_df = read_input_data()
+
+    print('Input data parsed:')
+    print(input_data_df)
+
+    #merged_data_df = pandas.DataFrame()
 
     # Fill in missing rows from other spreadsheets
-    for row in input_data:
+    for _, row in input_data_df.iterrows():
         # Read attributes from this row
         sensor_id = row['EPA Grid Point ID']
-        zip_code = row['zip']
-        comm_area_no = row['commArea']
-        ward_no = row['wardNo']
+        zip_code = row['Zipcode']
+        comm_area_no = row['Community Area Number']
+        ward_no = row['Ward Number']
 
         # Use attributes to look up priority 1-5 FEATURE_ID. geocode/latlong, and address
         for priority in range(1, 5):
@@ -60,26 +52,40 @@ def main():
 
             # Look up these values in LP_MASTER
             match_row = None
-            for r in lp_data:
+            for _, r in lp_data_df.iterrows():
                 # Use Candidate == p to locate matching priority sensor
                 if (col_val_match(r, 'sensorID', sensor_id) and
                         col_val_match(r, 'Candidate', priority) and
-                        col_val_match(r, 'commArea', comm_area_no) and
-                        col_val_match(r, 'wardNo', ward_no) and
-                        col_val_match(r, 'zip', zip_code)):
+                        col_val_match(r, 'ComArea', comm_area_no) and
+                        col_val_match(r, 'Ward', ward_no) and
+                        col_val_match(r, 'Zip', zip_code)):
                     match_row = r
                     break
 
             if match_row is None:
+                print(f'ERROR: No match found for sensorID={sensor_id} Candidate={priority} CommArea={comm_area_no} Ward={ward_no} Zip={zip_code}')
+                print('Verify column names before re-running:')
+                print(lp_data_df)
+                print('Aborting...')
                 sys.exit(1)
 
             # We have found match_row, our matching row from lp_data
             row[feature_id_col] = match_row['FEATURE_ID']
             row[geocode_col] = match_row['latlong']
-            row[address_col] = match_row['address']
+            row[address_col] = match_row['Address']
+
+            print(f'Row data has been filled out for {sensor_id}-{priority}')
+            print(row)
+
+            #new_row_df = pandas.DataFrame(row)
+            #merged_data_df = pandas.concat([merged_data_df, new_row_df], ignore_index=True)
+
+    print(f'Merged data has been compiled!')
+    print(input_data_df)
 
     # Write merged spreadsheet out as a new file
-    input_data.to_excel(OUTPUT_PATH)
+    print(f'Writing merged data to {OUTPUT_PATH}')
+    input_data_df.to_excel(OUTPUT_PATH)
 
     return
 
