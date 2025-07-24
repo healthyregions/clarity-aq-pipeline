@@ -5,10 +5,11 @@ import sys
 
 # Read configuration from environment variables
 LP_MASTER_PATH = os.getenv('LP_MASTER_PATH', 'data/cleaned/LightPostMaster_Cleaned.csv')
-GRID_PATH = os.getenv('GRID_PATH', './data/cleaned/GridMaster.csv')
-CANDIDATE_SENSORS_PATH = os.getenv('CANDIDATE_SENSORS_PATH', './data/cleaned/CandidateSensorswUID.csv')
-INPUT_DATA_PATH = os.getenv('INPUT_DATA_PATH', './data/no-community-input.xlsx')
-OUTPUT_PATH = os.getenv('OUTPUT_PATH', './data/merged-no-community-input.xlsx')
+# GRID_PATH = os.getenv('GRID_PATH', './data/cleaned/GridMaster.csv')
+# CANDIDATE_SENSORS_PATH = os.getenv('CANDIDATE_SENSORS_PATH', './data/cleaned/CandidateSensorswUID.csv')
+
+INPUT_DATA_PATH = os.getenv('INPUT_PATH', './data/no-community-input.xlsx')
+OUTPUT_PATH = os.getenv('OUTPUT_PATH', './data/merged-priority-lightpost-data.xlsx')
 
 
 # Given a row, this function will return True if the chosen column in that row matches the value
@@ -16,6 +17,7 @@ def col_val_match(row, col_name, match_value):
     return row[col_name] == match_value
 
 
+# Read input CSV / Excel files as dataframe
 def read_input_data():
     # Read relevant input files from disk
     lp_data_df = pd.read_csv(LP_MASTER_PATH)
@@ -71,8 +73,11 @@ def main():
 
             # We have found match_row, our matching row from lp_data
             row[feature_id_col] = match_row['FEATURE_ID']
-            row[geocode_col] = match_row['latlong']
             row[address_col] = match_row['Address']
+
+            # XXX: SensorID == 800 does not have priority latlong, and other latlong are same for all priority 1-5
+            # instead, build up latlong for each from Latitude/Longitude columns, which differ for 1-5 as expected
+            row[geocode_col] = f'{match_row["Latitude"]},{match_row["Longitude"]}'
 
         print(f'Row data has been filled out for {sensor_id}:')
         print(row)
