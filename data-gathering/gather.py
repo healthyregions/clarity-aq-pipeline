@@ -77,7 +77,7 @@ def main():
 
             # XXX: SensorID == 800 does not have priority latlong, and other latlong are same for all priority 1-5
             # instead, build up latlong for each from Latitude/Longitude columns, which differ for 1-5 as expected
-            row[geocode_col] = f'{match_row["Latitude"]},{match_row["Longitude"]}'
+            row[geocode_col] = f'{match_row["Latitude"]}, {match_row["Longitude"]}'
 
         print(f'Row data has been filled out for {sensor_id}:')
         print(row)
