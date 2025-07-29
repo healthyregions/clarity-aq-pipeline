@@ -48,7 +48,7 @@ jobs:
       # TODO: Run secondary container for R script(s), mount/read /usr/app/raw.csv
       # TODO: Run data cleanup, QA/QI, postprocessing, etc
       # TODO: Alternatively, run Rscript from Python (instead of secondary image?)
-      #- name: Build claritydatacleanup image (R? Run data cleanup / postprocessing on Clarity CSV data))
+      #- name: Build claritydatacleanup image (R? Run data cleanup / postprocessing on Clarity CSV data)
       #  run: docker compose run --build claritydatacleanup
 
       # TODO: Store cleaned data somewhere the frontend can fetch it (S3, MinIO, Git LFS, etc)

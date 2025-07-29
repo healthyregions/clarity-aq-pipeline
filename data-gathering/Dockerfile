@@ -9,4 +9,4 @@ COPY . .
 # Mount in data volume at runtime
 VOLUME /usr/app/data/
 
-CMD ["python", "./fetch_clarity_data.py"]
+CMD ["python", "./gather.py"]

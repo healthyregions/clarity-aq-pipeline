@@ -3,7 +3,7 @@ import clarityio
 import pandas as pd
 import sys
 
-RAW_DATA_OUTPUT_PATH = os.getenv('OUTPUT_PATH', '/usr/app/raw.csv')
+RAW_DATA_OUTPUT_PATH = os.getenv('OUTPUT_PATH', '/usr/app/data/raw.csv')
 
 # Fetch input parameters from envvars
 api_connection = clarityio.ClarityAPIConnection(

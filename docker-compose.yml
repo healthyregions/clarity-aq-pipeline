@@ -1,5 +1,20 @@
 services:
   clarityfetch:
     image: herop/clarityfetch
+    working_dir: /usr/app
+    env_file:
+      - .env
     build:
       context: .
+    volumes:
+      - ./sample-data:/usr/app/data/
+
+  claritydatacleanup:
+    image: herop/claritydatacleanup
+    working_dir: /home/rstudio
+    depends_on:
+      - clarityfetch
+    build:
+      context: .
+    volumes:
+      - ./sample-data:/usr/app/data/
