@@ -36,7 +36,7 @@ headers = {
 # Example: curl https://clarity-data-api.clarity.io/v2/recent-datasource-measurements-query -H 'Content-Type: application/json' -H "x-api-key: ${CLARITY_API_KEY}" -H 'Accept: application/json' -d '{"org":"cityof58A9","allDatasources":true,"replyWithContinuationToken":true,"outputFrequency":"hour","format":"csv-wide"}' -vvvv
 # Currently unused - this allows us to experiment with using continuation tokens
 def fetch_metrics_direct():
-    if CONTINUATION_TOKEN is None:
+    if CLARITY_CONTINUATION_TOKEN is None:
         requests.post(
             url=RECENT_MEASUREMENTS_URL,
             headers=headers,
@@ -51,9 +51,11 @@ def fetch_metrics_direct():
             headers=headers,
             data=json.dumps({
                 'org': CLARITY_ORG_NAME,
-                'continuationToken': CONTINUATION_TOKEN
+                'continuationToken': CLARITY_CONTINUATION_TOKEN
             }))
         # TODO: how to pass in stored continuation token?
+
+
 
 def fetch_metrics():
     request_body = {
