@@ -69,6 +69,19 @@ docker build -t herop/clarityfetch .
 docker run -it --env-file .env herop/clarityfetch
 ```
 
+### Local MinIO for prototyping connection to AWS S3 API
+```bash
+docker compose -f docker-compose.minio.yml up -d
+```
+
+This will run a local MinIO container on ports 9000/9001.
+
+To use it, set `S3_ENDPOINT_URL=http://localhost:9000`
+
+You can administrate with MinIO using your browser http://localhost:9000
+
+Log in using the values set for `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD` (default: `minioadmin` / `minioadmin`)
+
 ### Future: GitHub Action (Production)
 The production process will eventually be run automatically on a schedule, but it can be triggered manually for early testing as well.
 
@@ -85,4 +98,6 @@ After selecting the branch, click the green "Run workflow" button at the button 
 Either refresh the page or wait a few seconds, and you should see a new Run appear in the list :tada:
 
 You can click on this run to drill down and see the progress and log out
+
+
 
