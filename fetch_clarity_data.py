@@ -212,18 +212,22 @@ def main(args):
         clarity = ClarityAPI(s3_client)
         data, locations, token, query = clarity.fetch_sensor_data()
 
+        # Store metadata about this request: query.json & token.txt
         log.debug(f'Saving continuation token to file: {CONTINUATION_TOKEN_OUTPUT_PATH}')
         write_txt(CONTINUATION_TOKEN_OUTPUT_PATH, token)
 
         log.info(f'Writing query to file: {QUERY_OUTPUT_PATH}')
         write_json_dict(QUERY_OUTPUT_PATH, query)
 
-        log.info(f'Writing data to file: {RAW_DATA_OUTPUT_PATH}')
-        write_csv(RAW_DATA_OUTPUT_PATH, data)
-
+        # Since we're using continuation tokens, this
+        # won't be the full list of locations every time
         if OUTPUT_LOCATIONS_AS_JSON:
             log.info(f'Writing locations to file: {LOCATIONS_OUTPUT_PATH}')
             write_json_dict(LOCATIONS_OUTPUT_PATH, locations)
+
+        # Output metrics and run post-processing
+        log.info(f'Writing data to file: {RAW_DATA_OUTPUT_PATH}')
+        write_csv(RAW_DATA_OUTPUT_PATH, data)
 
         # TODO: adjust after cleaning process is codified
         log.info(f'Running post-processing: {RAW_DATA_OUTPUT_PATH} -> {CLEANED_DATA_OUTPUT_PATH}')
@@ -235,12 +239,14 @@ def main(args):
     if args.push:
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
+            # Comment this line if we don't want to store raw (uncleaned) metrics in S3
+            f'{RAW_DATA_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/raw.csv'],
             f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/locations.json'],
+            f'{QUERY_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/query.json'],
             f'{CLEANED_DATA_OUTPUT_PATH}': [
                 f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/cleaned.json',
                 f'{S3_BUCKET_NAME}/latest.json'
             ],
-            f'{RAW_DATA_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/raw.csv'],
             f'{CONTINUATION_TOKEN_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/token.txt'],
         }
 
