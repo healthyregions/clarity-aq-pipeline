@@ -1,20 +1,81 @@
+volumes:
+  minio_data:
+
 services:
+  minio:
+    image: minio/minio:latest
+    ports:
+      - "9000:9000" # S3 API port
+      - "9001:9001" # MinIO Console port
+    command: server --console-address ":9001" /data
+    profiles: ["minio"]
+    env_file:
+      - .env
+    volumes:
+      - minio_data:/data # Persistent storage for MinIO data
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+
+  createbuckets:
+    image: minio/mc
+    env_file:
+      - .env
+    network_mode: host
+    profiles: ["minio"]
+    entrypoint: >
+      /bin/sh -c "
+      echo creating ${S3_BUCKET_NAME} on ${S3_ENDPOINT_URL}...;
+      /usr/bin/mc alias set myminio ${S3_ENDPOINT_URL} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      /usr/bin/mc mb myminio/${S3_BUCKET_NAME};
+      /usr/bin/mc policy set public myminio/${S3_BUCKET_NAME};
+      exit 0;
+      "
+    depends_on:
+      minio:
+        condition: service_healthy
+
   clarityfetch:
     image: herop/clarityfetch
-    working_dir: /usr/app
-    #env_file:
-    #  - .env
+    env_file:
+      - .env
     build:
       context: .
+    profiles: ["pipeline"]
+    command: ['--fetch']
+    network_mode: host
     volumes:
       - ./sample-data:/usr/app/data/
 
-  claritydatacleanup:
-    image: herop/claritydatacleanup
-    working_dir: /home/rstudio
-    depends_on:
-      - clarityfetch
+
+#  datacleanup:
+#    image: herop/claritydatacleanup
+#    working_dir: /home/rstudio
+#    build:
+#      context: .
+#      dockerfile: r.Dockerfile
+#    volumes:
+#      - ./sample-data:/usr/app/data/
+#    profiles: ["pipeline"]
+#    depends_on:
+#      clarityfetch:
+#        condition: service_completed_successfully
+
+  s3push:
+    image: herop/clarityfetch
+    env_file:
+      - .env
     build:
       context: .
+    command: ['--push']
+    network_mode: host
     volumes:
       - ./sample-data:/usr/app/data/
+    profiles: ["pipeline"]
+    depends_on:
+      # datacleanup:
+      clarityfetch:
+        condition: service_completed_successfully

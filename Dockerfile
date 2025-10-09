@@ -1,4 +1,4 @@
-FROM python:3-slim
+FROM python:3
 WORKDIR /usr/app
 
 # Install Python deps/scripts
@@ -9,4 +9,5 @@ COPY . .
 # Mount in data volume at runtime
 VOLUME /usr/app/data/
 
-CMD ["python", "./fetch_clarity_data.py"]
+ENTRYPOINT ["python", "./fetch_clarity_data.py"]
+CMD ["--help"]

@@ -100,4 +100,72 @@ Either refresh the page or wait a few seconds, and you should see a new Run appe
 You can click on this run to drill down and see the progress and log out
 
 
+## Quick Start
+Copy `.env.example` to `.env` and edit the `CLARITY_API_KEY`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY`
 
+By default AWS S3 will be used, but MinIO can be configured instead (see below)
+
+Build the Docker image:
+```bash
+docker compose build
+```
+
+Fetch sensor metrics data from clarity to the local data folder:
+```bash
+docker compose run -it clarityfetch
+
+INFO:__main__:Submitting query: {'org': 'cityof58A9', 'continuationToken': 'aknJUeyJvIjogIm...'}
+INFO:__main__:Writing query to file: /usr/app/data/query.json
+INFO:__main__:Writing data to file: /usr/app/data/raw.csv
+INFO:__main__:Writing locations to file: /usr/app/data/locations.json
+INFO:__main__:Running post-processing: /usr/app/data/raw.csv -> /usr/app/data/cleaned.json
+INFO:__main__:Data fetched successfully!
+```
+
+FUTURE: Clean the downloaded data before uploading:
+```bash
+# docker compose run -it datacleanup
+```
+
+Push cleaned output data to AWS S3:
+```bash
+docker compose run -it s3push
+
+INFO:__main__:Uploaded successfully to AWS S3 (us-east-2): /usr/app/data/locations.json -> chicago-aq/2025-10-09@19:54:20/locations.json
+INFO:__main__:Uploaded successfully to AWS S3 (us-east-2): /usr/app/data/cleaned.json -> chicago-aq/2025-10-09@19:54:20/cleaned.json
+INFO:__main__:Uploaded successfully to AWS S3 (us-east-2): /usr/app/data/cleaned.json -> chicago-aq/latest.json
+INFO:__main__:Uploaded successfully to AWS S3 (us-east-2): /usr/app/data/raw.csv -> chicago-aq/2025-10-09@19:54:20/raw.csv
+INFO:__main__:Uploaded successfully to AWS S3 (us-east-2): /usr/app/data/token.txt -> chicago-aq/token.txt
+INFO:__main__:Data pushed successfully!
+```
+
+### Using MinIO
+Edit `.env` to also update the `MINIO_ROOT_USER` and `MINIO_ROOT_PASSWORD`
+
+(Optional) start up a local MinIO instance for free testing:
+```bash
+docker compose --profile minio up -d
+```
+
+This will start up MinIO on port 9000 which you can access using your browser: http://localhost:9000
+
+You should be able to log in using the user / password supplied above. Default: `minioadmin` / `minioadmin`
+
+To use MinIO with the script, set the following:
+```
+S3_ACCESS_KEY=MINIO_ROOT_USER
+S3_SECRET_KEY=MINIO_ROOT_PASSWORD
+S3_ENDPOINT_URL=http://localhost:9000
+```
+
+When you run the pipeline, you will see your files are uploaded to MinIO instead:
+```bash
+docker compose run -it s3push
+
+INFO:__main__:Uploaded successfully to MinIO (http://localhost:9000): /usr/app/data/locations.json -> chicago-aq/2025-10-09@19:54:20/locations.json
+INFO:__main__:Uploaded successfully to MinIO (http://localhost:9000): /usr/app/data/cleaned.json -> chicago-aq/2025-10-09@19:54:20/cleaned.json
+INFO:__main__:Uploaded successfully to MinIO (http://localhost:9000): /usr/app/data/cleaned.json -> chicago-aq/latest.json
+INFO:__main__:Uploaded successfully to MinIO (http://localhost:9000): /usr/app/data/raw.csv -> chicago-aq/2025-10-09@19:54:20/raw.csv
+INFO:__main__:Uploaded successfully to MinIO (http://localhost:9000): /usr/app/data/token.txt -> chicago-aq/token.txt
+INFO:__main__:Data pushed successfully!
+```
