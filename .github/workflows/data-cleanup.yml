@@ -38,23 +38,26 @@ jobs:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
 
+      # Fetch Clarity API data and save raw files locally
+      - name: Build + run clarityfetch image (Fetch Clarity API data and save as CSV)
+        run: docker compose run -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} --build clarityfetch
+
+
+      # Currently saved as intermediary CSV within container: /usr/app/raw.csv
+      # Run data cleanup, QA/QI, postprocessing, etc to produce /usr/app/cleaned.csv
+      # TODO: decide which metrics are important to preserve/display - UIC to produce these R scripts
+      # TODO: Run secondary container for R script(s), mount/read /usr/app/raw.csv
+      # TODO: Alternatively, run Rscript from Python (instead of secondary image?)
+      #- name: Build datacleanup image (R? Run data cleanup / postprocessing on Clarity CSV data)
+      #  run: docker compose run --build datacleanup
+
+
       # Fetch Clarity API data and save as CSV
       - name: Build + run clarityfetch image (Fetch Clarity API data and save as CSV)
-        run: docker compose run -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} --build clarityfetch
-      # Currently save as intermediary CSV within container: /usr/app/raw.csv
+        run: docker compose run -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} s3push
 
-      # TODO: decide which metrics are important to preserve/display
+      # TODO: push image to NCSA Harbor / GHCR.io / Docker Hub before deleting?
 
-      # TODO: Run secondary container for R script(s), mount/read /usr/app/raw.csv
-      # TODO: Run data cleanup, QA/QI, postprocessing, etc
-      # TODO: Alternatively, run Rscript from Python (instead of secondary image?)
-      #- name: Build claritydatacleanup image (R? Run data cleanup / postprocessing on Clarity CSV data)
-      #  run: docker compose run --build claritydatacleanup
+      - name: Delete clarityfetch + datacleanup images
+        run: docker rmi -f clarityfetch  # datacleanup
 
-      # TODO: Store cleaned data somewhere the frontend can fetch it (S3, MinIO, Git LFS, etc)
-
-      # ...    ...    ...    ...    ...    ...
-
-      # TODO: implement as post step? see https://github.com/marketplace/actions/run-and-post-run-action
-      - name: Delete clarityfetch + claritydatacleanup images
-        run: docker rmi -f clarityfetch
