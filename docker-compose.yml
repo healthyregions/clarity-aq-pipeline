@@ -75,7 +75,8 @@ services:
     volumes:
       - ./sample-data:/usr/app/data/
     profiles: ["pipeline"]
-    depends_on:
-      # datacleanup:
-      clarityfetch:
-        condition: service_completed_successfully
+    #depends_on:
+    #  clarityfetch:
+    #    condition: service_completed_successfully
+    #  datacleanup:
+    #    condition: service_completed_successfully
