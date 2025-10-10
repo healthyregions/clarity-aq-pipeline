@@ -167,8 +167,12 @@ class ClarityAPI(object):
             body['replyWithContinuationToken'] = True
             # body['format'] = 'csv-wide'
 
+        redacted = json.loads(json.dumps(body))
+        if 'continuationToken' in redacted:
+            redacted['continuationToken'] = f'{body["continuationToken"][:20]}...'
+
         try:
-            log.info(f'Submitting query: {body}')
+            log.info(f'Submitting query: {redacted}')
             r = requests.post(url=url, headers=self.headers, data=json.dumps(body))
             log.debug(r)
             response = r.json()
@@ -179,6 +183,10 @@ class ClarityAPI(object):
             log.debug(f'Submitted query: {query}')
             data = from_json(response['data'])
             log.debug(f'Fetched data: {data}')
+            if 'locations' not in response:
+                log.warning(f'Warning: no metric updates detected since last run - skipping pushing empty data file')
+                sys.exit(25)
+
             locations = response['locations']
             log.debug(f'Fetched locations: {locations}')
             token = r.headers['x-clarity-continuation-token']
