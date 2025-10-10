@@ -44,7 +44,7 @@ jobs:
 
       # Fetch Clarity API data and save raw files locally
       - name: Build + run clarityfetch image (Fetch Clarity API data and save as CSV)
-        run: docker compose run ---remove-orphans e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} --build clarityfetch
+        run: docker compose run --remove-orphans -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} --build clarityfetch
 
 
       # Currently saved as intermediary CSV within container: /usr/app/raw.csv
