@@ -56,8 +56,8 @@ jobs:
       #  run: docker compose run --build datacleanup
 
 
-      # Fetch Clarity API data and save as CSV
-      - name: Build + run clarityfetch image (Fetch Clarity API data and save as CSV)
+      # Upload cleaned output files to S3
+      - name: Build + run s3push image (Fetch Clarity API data and save as CSV)
         run: docker compose run -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} s3push
 
       # TODO: push image to NCSA Harbor / GHCR.io / Docker Hub before deleting?
