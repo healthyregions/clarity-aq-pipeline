@@ -47,7 +47,7 @@ s3_client = s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KE
 # Directory within the bucket (debug / testing only)
 # Use S3_UPLOAD_PATH if given, otherwise use timestamp: 2025-10-02@16:41:25
 S3_UPLOAD_PATH = os.getenv('S3_UPLOAD_PATH', None)
-if not S3_UPLOAD_PATH
+if not S3_UPLOAD_PATH:
     S3_UPLOAD_PATH = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d@%H:%M:%S')
 
 # Local directory that will be uploaded to the bucket
