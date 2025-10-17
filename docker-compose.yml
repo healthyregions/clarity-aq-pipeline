@@ -39,7 +39,7 @@ services:
         condition: service_healthy
 
   clarityfetch:
-    image: herop/clarityfetch
+    image: ghcr.io/healthyregions/clarity-aq-pipeline
     env_file:
       - .env
     build:
@@ -65,7 +65,7 @@ services:
 #        condition: service_completed_successfully
 
   s3push:
-    image: herop/clarityfetch
+    image: ghcr.io/healthyregions/clarity-aq-pipeline
     env_file:
       - .env
     build:
