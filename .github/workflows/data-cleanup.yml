@@ -61,8 +61,6 @@ jobs:
       - name: Build + run s3push image (Upload cleaned output files to S3)
         run: docker compose run --remove-orphans -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} s3push
 
-      # TODO: push image to NCSA Harbor / GHCR.io / Docker Hub before deleting?
-
       - name: Delete clarityfetch + datacleanup images
         run: docker rmi -f clarityfetch  # datacleanup
 
