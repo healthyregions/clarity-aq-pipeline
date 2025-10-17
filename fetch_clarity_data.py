@@ -1,4 +1,3 @@
-# Built-ins
 import argparse
 import datetime
 import json
@@ -11,13 +10,25 @@ import requests
 import s3fs
 import sys
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+
+# Shorthand helper functon for setting or defaulting a variable value
+def set_or_default(value, default):
+    return value if value else default
+
+
+# Configure logging based on user input
+LOGLEVEL = set_or_default(
+    value=os.getenv('LOGLEVEL', 'INFO').upper(),
+    default='INFO'
+)
+level = logging.getLevelName(LOGLEVEL)
+logging.basicConfig(level=level)
 log = logging.getLogger(__name__)
 
 # Connection details for Clarity API
 CLARITY_ORG_NAME = os.getenv('CLARITY_ORG_NAME', 'cityof58A9')
 CLARITY_API_KEY = os.getenv('CLARITY_API_KEY')
+CLARITY_USE_CONTINUATION_TOKEN = os.getenv('CLARITY_USE_CONTINUATION_TOKEN', 'falso').lower() in ('true', '1', 't')
 CLARITY_HOSTNAME = 'https://clarity-data-api.clarity.io/v2'
 
 # S3 Endpoint URL: use default for AWS S3 or override for MinIO (e.g. http://localhost:9000)
@@ -46,9 +57,11 @@ s3_client = s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KE
 
 # Directory within the bucket (debug / testing only)
 # Use S3_UPLOAD_PATH if given, otherwise use timestamp: 2025-10-02@16:41:25
-S3_UPLOAD_PATH = os.getenv('S3_UPLOAD_PATH', None)
-if not S3_UPLOAD_PATH:
-    S3_UPLOAD_PATH = datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d@%H:%M:%S')
+S3_UPLOAD_PATH = set_or_default(
+    value=os.getenv('S3_UPLOAD_PATH', None),
+    default=datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d@%H:%M:%S')
+)
+
 
 # Local directory that will be uploaded to the bucket
 LOCAL_OUTPUT_DIR = os.getenv('LOCAL_OUTPUT_DIR', '/usr/app/data')
@@ -60,7 +73,6 @@ QUERY_OUTPUT_PATH = os.getenv('QUERY_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/query.js
 
 OUTPUT_LOCATIONS_AS_JSON = os.getenv('OUTPUT_LOCATIONS_AS_JSON', 'False').lower() in ('true', '1', 't')
 LOCATIONS_OUTPUT_PATH = os.getenv('LOCATIONS_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/locations.json')
-
 
 # Data cleanup process will be written in R
 # It is likely that these cleanup scripts will expect CSV format
@@ -140,17 +152,19 @@ class ClarityAPI(object):
     # Fetch existing continuation token from S3 bucket
     def read_continuation_token(self):
         token_local_path = f'{S3_BUCKET_NAME}/token.txt'
-        if self.s3_client.exists(token_local_path):
-            with self.s3_client.open(token_local_path, 'r') as f:
-                 return f.read()
+        if CLARITY_USE_CONTINUATION_TOKEN:
+            if self.s3_client.exists(token_local_path):
+                with self.s3_client.open(token_local_path, 'r') as f:
+                     return f.read()
         return None
 
     # Write continuation token to local output directory
     # This will be written to S3 with the rest of the uploaded output files
     def write_continuation_token(self, token):
         # store latest continuation token locally
-        with open(CONTINUATION_TOKEN_OUTPUT_PATH, 'w') as f:
-            f.write(token)
+        if CLARITY_USE_CONTINUATION_TOKEN:
+            with open(CONTINUATION_TOKEN_OUTPUT_PATH, 'w') as f:
+                f.write(token)
 
     # Example: curl https://clarity-data-api.clarity.io/v2/recent-datasource-measurements-query -H 'Content-Type: application/json' -H 'x-api-key: ${CLARITY_API_KEY}' -H 'Accept: application/json' -d '{'org':'cityof58A9','allDatasources':true,'replyWithContinuationToken':true,'outputFrequency':'hour','format':'csv-wide'}' -vvvv
     # Currently unused - this allows us to experiment with using continuation tokens
@@ -254,9 +268,11 @@ def main(args):
             f'{CLEANED_DATA_OUTPUT_PATH}': [
                 f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/cleaned.json',
                 f'{S3_BUCKET_NAME}/latest.json'
-            ],
-            f'{CONTINUATION_TOKEN_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/token.txt'],
+            ]
         }
+
+        if CLARITY_USE_CONTINUATION_TOKEN:
+            outfile_mapping[CONTINUATION_TOKEN_OUTPUT_PATH] = [f'{S3_BUCKET_NAME}/token.txt']
 
         s3api = S3API(s3_client)
         for key in outfile_mapping:
