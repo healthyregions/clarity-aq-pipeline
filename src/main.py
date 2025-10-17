@@ -53,10 +53,15 @@ def main(args):
     if args.push:
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
-            # Comment this line if we don't want to store raw (uncleaned) metrics in S3
+            # Uncomment this line if we want to preserve raw (uncleaned) metrics from Clarity in S3
             #f'{RAW_DATA_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/raw.csv'],
-            f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/locations.json'],
-            f'{QUERY_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/query.json'],
+
+            # Uncomment this line if we want to preserve returned locations data from each request
+            # NOTE: using continuation tokens means we may not get back the full list every time
+            #f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/locations.json'],
+
+            # Uncomment this line if we want to preserve the query that was sent with each request
+            #f'{QUERY_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/query.json'],
             f'{CLEANED_DATA_OUTPUT_PATH}': [
                 f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/cleaned.json',
                 f'{S3_BUCKET_NAME}/latest.json'

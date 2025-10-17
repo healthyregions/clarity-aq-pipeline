@@ -9,11 +9,13 @@ s3_client = s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KE
     # Use custom endpoint URL for self-hosted (e.g. MinIO)
     'endpoint_url': S3_ENDPOINT_URL,
     # NOTE: StorageClass & Region are ignored when using MinIO
-}) if IS_MINIO else s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KEY, client_kwargs={
+}) if IS_MINIO else s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KEY, s3_additional_kwargs={
+    # provide a StorageClass to use for uploads (default: INTELLIGENT_TIERING)
+    'StorageClass': S3_STORAGE_CLASS
+}, client_kwargs={
     # For default endpoint, assume AWS S3
     # for this case, we will want to specify a Region & StorageClass
     'region_name': S3_REGION,
-    'StorageClass': S3_STORAGE_CLASS
 })
 
 
