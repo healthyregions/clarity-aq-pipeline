@@ -54,7 +54,7 @@ def main(args):
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
             # Comment this line if we don't want to store raw (uncleaned) metrics in S3
-            f'{RAW_DATA_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/raw.csv'],
+            #f'{RAW_DATA_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/raw.csv'],
             f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/locations.json'],
             f'{QUERY_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/query.json'],
             f'{CLEANED_DATA_OUTPUT_PATH}': [

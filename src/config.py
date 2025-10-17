@@ -33,6 +33,9 @@ S3_ACCESS_KEY = os.getenv('S3_ACCESS_KEY', None)
 S3_SECRET_KEY = os.getenv('S3_SECRET_KEY', None)
 IS_MINIO = True if S3_ENDPOINT_URL else False
 
+# one of 'STANDARD' | 'REDUCED_REDUNDANCY' | 'STANDARD_IA' | 'ONEZONE_IA'
+#   'INTELLIGENT_TIERING' | 'GLACIER' | 'DEEP_ARCHIVE' | 'OUTPOSTS' | 'GLACIER_IR'
+S3_STORAGE_CLASS = os.getenv('S3_STORAGE_CLASS', 'INTELLIGENT_TIERING')
 
 # Directory within the bucket (debug / testing only)
 # Use S3_UPLOAD_PATH if given, otherwise use timestamp: 2025-10-02@16:41:25

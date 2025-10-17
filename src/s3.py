@@ -1,4 +1,5 @@
-from config import log, IS_MINIO, S3_ENDPOINT_URL, S3_REGION, S3_ACCESS_KEY, S3_SECRET_KEY
+from config import log, IS_MINIO, S3_ACCESS_KEY, S3_SECRET_KEY
+from config import S3_ENDPOINT_URL, S3_REGION, S3_STORAGE_CLASS
 import sys
 
 import s3fs
@@ -6,11 +7,13 @@ import s3fs
 # Build an S3 client using the given credentials + endpoint
 s3_client = s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KEY, client_kwargs={
     # Use custom endpoint URL for self-hosted (e.g. MinIO)
-    'endpoint_url': S3_ENDPOINT_URL
+    'endpoint_url': S3_ENDPOINT_URL,
+    # NOTE: StorageClass & Region are ignored when using MinIO
 }) if IS_MINIO else s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KEY, client_kwargs={
     # For default endpoint, assume AWS S3
-    # for this case, we will want to specify a region
-    'region_name': S3_REGION
+    # for this case, we will want to specify a Region & StorageClass
+    'region_name': S3_REGION,
+    'StorageClass': S3_STORAGE_CLASS
 })
 
 
