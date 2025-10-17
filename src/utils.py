@@ -1,0 +1,44 @@
+import json
+import pandas as pd
+from pandas import DataFrame
+from pathlib import Path
+
+# Shorthand helper functon for setting or defaulting a variable value
+def set_or_default(value, default):
+    return value if value else default
+
+
+# Data cleanup process will be written in R
+# It is likely that these cleanup scripts will expect CSV format
+def read_csv(local_path: str):
+    return pd.read_csv(local_path)
+
+def write_csv(local_path: str, df: DataFrame):
+    df.to_csv(local_path)
+
+def write_txt(local_path: str, data: str):
+    with open(local_path, 'w') as f:
+        f.write(data)
+
+
+# Final pipeline output is likely to be JSON
+# This ensures that final data is easily consumable by the frontend dashboard
+def from_json(data: dict):
+    return DataFrame(data)
+
+def write_json_dict(local_path: str, data: dict):
+    write_txt(local_path, data=json.dumps(data, indent=4))
+
+
+# Likely needed to convert the cleaned data back to JSON
+def convert_csv_to_json(path: str):
+    base_path = Path(path).stem
+    df = pd.read_csv(f'{base_path}.csv')
+    df.to_json(f'{base_path}.json')
+
+
+# Likely needed to convert the cleaned data back to JSON
+# TODO: convert to 4-digit precision for latlong
+def run_postprocessing(input_path: str, output_path: str):
+    df = pd.read_csv(input_path, index_col=0)
+    df.to_json(output_path, orient='records')

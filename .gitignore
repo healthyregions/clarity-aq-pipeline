@@ -195,3 +195,6 @@ cython_debug/
 
 # Environment variables contain secret API KEYs, this should NOT be committed to source control
 .env
+
+# Avoid storing our actual output files in git
+data/

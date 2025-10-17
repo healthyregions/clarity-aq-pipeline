@@ -9,5 +9,5 @@ COPY . .
 # Mount in data volume at runtime
 VOLUME /usr/app/data/
 
-ENTRYPOINT ["python", "./fetch_clarity_data.py"]
+ENTRYPOINT ["python", "./src/main.py"]
 CMD ["--help"]

@@ -48,7 +48,7 @@ services:
     command: ['--fetch']
     network_mode: host
     volumes:
-      - ./sample-data:/usr/app/data/
+      - ./data:/usr/app/data/
 
 
 #  datacleanup:
@@ -58,7 +58,7 @@ services:
 #      context: .
 #      dockerfile: r.Dockerfile
 #    volumes:
-#      - ./sample-data:/usr/app/data/
+#      - ./data:/usr/app/data/
 #    profiles: ["pipeline"]
 #    depends_on:
 #      clarityfetch:
@@ -73,7 +73,7 @@ services:
     command: ['--push']
     network_mode: host
     volumes:
-      - ./sample-data:/usr/app/data/
+      - ./data:/usr/app/data/
     profiles: ["pipeline"]
     #depends_on:
     #  clarityfetch:
