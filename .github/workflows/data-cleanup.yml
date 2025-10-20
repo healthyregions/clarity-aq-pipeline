@@ -20,7 +20,7 @@ on:
   #            │ │ │ │ │
   #            * * * * *
   schedule:
-    # Run once per day at ~ midnight (UTC)
+    # Run once per hour at ~ 5 minutes after the hour
     - cron: "5 * * * *"
     
   # Allows you to run this workflow manually from the Actions tab
