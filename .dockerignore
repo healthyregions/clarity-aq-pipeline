@@ -1,3 +1,6 @@
+# No need to include our workflow files, exclude these since they don't affect our image
+.github/
+
 # Environment variables contain secret API KEYs, this should NOT be added to container image
 .env
 
