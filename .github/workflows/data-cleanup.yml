@@ -1,15 +1,10 @@
-# This is a basic workflow to help you get started with Actions
+# This workflow will fetch air quality sensor data from the Clarity REST API v2,
+# run cleanup operations on this data, and then push it into an S3 bucket
 
 name: data-cleanup
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  #push:
-  #  branches: [ "main" ]
-  #pull_request:
-  #  branches: [ "main" ]
-  
   #            ┌───────────── minute (0 - 59)
   #            │ ┌───────────── hour (0 - 23)
   #            │ │ ┌───────────── day of the month (1 - 31)
