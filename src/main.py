@@ -16,8 +16,8 @@ from s3 import S3API
 
 
 def main(args):
-    if not args.fetch and not args.push and not args.locations:
-        log.error('You must specify either -f (--fetch) or -p (--push) or -l (--locations)')
+    if not args.fetch and not args.push:
+        log.error('You must specify either -f (--fetch) or -p (--push)')
         sys.exit(200)
 
     # Fetch metrics from the clarity API
@@ -38,6 +38,11 @@ def main(args):
         # Since we're using continuation tokens, this
         # won't be the full list of locations every time
         if OUTPUT_LOCATIONS_AS_JSON:
+            # Scrub locations before uploading
+            log.info(f'Fuzzing locations to 4 decimal places of precision...')
+            for loc in locations:
+                loc["lat"] = Decimal(loc["lat"]).quantize(Decimal('0.0000'))
+                loc["lon"] = Decimal(loc["lon"]).quantize(Decimal('0.0000'))
             log.info(f'Writing locations to file: {LOCATIONS_OUTPUT_PATH}')
             write_json_dict(LOCATIONS_OUTPUT_PATH, locations)
 
@@ -50,15 +55,6 @@ def main(args):
         run_postprocessing(RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH)
 
         log.info('Data fetched successfully!')
-
-    # Scrub locations before uploading
-    if args.locations:
-        locations = read_json_dict(LOCATIONS_OUTPUT_PATH)
-        log.info(f'Fuzzing locations to 4 decimal places of precision...')
-        for loc in locations:
-            loc["lat"] = Decimal(loc["lat"]).quantize(Decimal('0.0000'))
-            loc["lon"] = Decimal(loc["lon"]).quantize(Decimal('0.0000'))
-        write_json_dict(LOCATIONS_OUTPUT_PATH, data=locations)
 
 
     # Push select files from the output folder to the proper destinations in S3
@@ -79,7 +75,7 @@ def main(args):
             # Uncomment this line if we want to preserve returned locations data from each request
             # NOTE: using continuation tokens means we may not get back the full list every time
             # NOTE: we NEED TO fuzz the precision here - use 4 decimal places instead of 5
-            f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/locations.json'],
+            #f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/locations.json'],
 
             # Uncomment this line if we want to preserve the query that was sent with each request
             #f'{QUERY_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/query.json'],
@@ -105,7 +101,7 @@ def main(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Chicago Air Quality Sensor Grid')
     parser.add_argument('-f', '--fetch', action='store_true', help='Fetch sensor metrics from Clarity REST API v2')
-    parser.add_argument('-l', '--locations',  action='store_false' if OUTPUT_LOCATIONS_AS_JSON else 'store_true', help='Also output locations from Clarity REST API v2')
+    #parser.add_argument('-l', '--locations',  action='store_false' if OUTPUT_LOCATIONS_AS_JSON else 'store_true', help='Also output locations from Clarity REST API v2')
     # Data cleanup will take place in between these two independent steps
     parser.add_argument('-p', '--push',  action='store_true',  help='Upload resulting output data to S3 (Minio or AWS S3)')
 
