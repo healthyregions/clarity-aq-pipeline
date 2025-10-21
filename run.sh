@@ -12,7 +12,7 @@ echo ". Done!"
 
 # Build container
 echo "Building container image(s)..."
-docker compose build
+docker compose --profile pipeline build
 
 # Fetch raw sensor data from Clarity REST API v2
 echo "Running clarityfetch container from built image..."
@@ -30,7 +30,7 @@ echo -n "3 "
 sleep 1s
 echo -n "2 "
 sleep 1s
-echo -n "1"
+echo "1"
 sleep 1s
 
 # Push cleaned result data to S3

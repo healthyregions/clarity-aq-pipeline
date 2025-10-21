@@ -1,11 +1,12 @@
 import argparse
+import json
 import sys
 
 from config import log, CLARITY_HOSTNAME, CLARITY_USE_CONTINUATION_TOKEN
 from config import OUTPUT_LOCATIONS_AS_JSON, LOCATIONS_OUTPUT_PATH
 from config import CONTINUATION_TOKEN_OUTPUT_PATH, QUERY_OUTPUT_PATH
 from config import RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH
-from config import S3_BUCKET_NAME, S3_UPLOAD_PATH
+from config import S3_BUCKET_NAME, S3_UPLOAD_PATH, INDEX_OUTPUT_PATH
 
 from utils import write_txt, write_json_dict, write_csv, run_postprocessing
 
@@ -51,6 +52,14 @@ def main(args):
 
     # Push select files from the output folder to the proper destinations in S3
     if args.push:
+        s3api = S3API()
+
+        # Grab top-level objects (folder, etc) from S3
+        # Also, append the folder that we are currently uploading :)
+        tlos = s3api.list_folders() + [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}']
+        with open(INDEX_OUTPUT_PATH, 'w') as f:
+            json.dump(tlos, f)
+
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
             # Uncomment this line if we want to preserve raw (uncleaned) metrics from Clarity in S3
@@ -58,20 +67,22 @@ def main(args):
 
             # Uncomment this line if we want to preserve returned locations data from each request
             # NOTE: using continuation tokens means we may not get back the full list every time
-            #f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/locations.json'],
+            #f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/locations.json'],
 
             # Uncomment this line if we want to preserve the query that was sent with each request
             #f'{QUERY_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/query.json'],
             f'{CLEANED_DATA_OUTPUT_PATH}': [
-                f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/cleaned.json',
+                f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}.json',
                 f'{S3_BUCKET_NAME}/latest.json'
             ],
+
+            # Include a list of the available files within the bucket
+            f'{INDEX_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/index.json']
         }
 
         if CLARITY_USE_CONTINUATION_TOKEN:
             outfile_mapping[CONTINUATION_TOKEN_OUTPUT_PATH] = [f'{S3_BUCKET_NAME}/token.txt']
 
-        s3api = S3API()
         for key in outfile_mapping:
             for dest in outfile_mapping[key]:
                 s3api.push_to_s3(local_path=key, remote_path=dest)

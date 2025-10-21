@@ -1,8 +1,9 @@
-from config import log, IS_MINIO, S3_ACCESS_KEY, S3_SECRET_KEY
-from config import S3_ENDPOINT_URL, S3_REGION, S3_STORAGE_CLASS
+from config import log, IS_MINIO, S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY
+from config import S3_REGION, S3_STORAGE_CLASS, S3_BUCKET_NAME
 import sys
 
 import s3fs
+
 
 # Build an S3 client using the given credentials + endpoint
 s3_client = s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KEY, client_kwargs={
@@ -21,6 +22,9 @@ s3_client = s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KE
 
 # globals: S3_ENDPOINT_URL, IS_MINIO, S3_REGION, s3_client
 class S3API(object):
+    def list_folders(self):
+        return s3_client.ls(path=f'{S3_BUCKET_NAME}/')
+
     def push_to_s3(self, local_path: str, remote_path: str):
         # Determine destination within S3
         s3_label = 'MinIO' if IS_MINIO else 'AWS S3'
