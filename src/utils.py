@@ -1,4 +1,6 @@
 import json
+from decimal import Decimal
+
 import pandas as pd
 from pandas import DataFrame
 from pathlib import Path
@@ -26,8 +28,12 @@ def write_txt(local_path: str, data: str):
 def from_json(data: dict):
     return DataFrame(data)
 
-def write_json_dict(local_path: str, data: dict):
-    write_txt(local_path, data=json.dumps(data, indent=4))
+def read_json_dict(path: str):
+    with open(path, 'r') as f:
+        return json.load(f)
+
+def write_json_dict(path: str, data: dict):
+    write_txt(path, data=json.dumps(data, indent=4, default=decimal_encoder))
 
 
 # Likely needed to convert the cleaned data back to JSON
@@ -42,3 +48,10 @@ def convert_csv_to_json(path: str):
 def run_postprocessing(input_path: str, output_path: str):
     df = pd.read_csv(input_path, index_col=0)
     df.to_json(output_path, orient='records')
+
+
+# Using a custom default function for json.dumps
+def decimal_encoder(obj):
+    if isinstance(obj, Decimal):
+        return str(obj)
+    raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")

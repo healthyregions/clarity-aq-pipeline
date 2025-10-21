@@ -107,7 +107,7 @@ By default AWS S3 will be used, but MinIO can be configured instead (see below)
 
 Build the Docker image:
 ```bash
-docker compose build
+docker compose --profile pipeline build
 ```
 
 Fetch sensor metrics data from clarity to the local data folder:

@@ -56,13 +56,14 @@ services:
 #    working_dir: /home/rstudio
 #    build:
 #      context: .
-#      dockerfile: r.Dockerfile
+#      dockerfile: Dockerfile.r
 #    volumes:
 #      - ./data:/usr/app/data/
 #    profiles: ["pipeline"]
-#    depends_on:
-#      clarityfetch:
-#        condition: service_completed_successfully
+#    #depends_on:
+#    #  clarityfetch:
+#    #    condition: service_completed_successfully
+
 
   s3push:
     image: ghcr.io/healthyregions/clarity-aq-pipeline
