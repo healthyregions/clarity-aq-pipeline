@@ -53,6 +53,7 @@ class ClarityAPI(object):
             body['allDatasources'] = True
             body['outputFrequency'] = 'hour'
             body['replyWithContinuationToken'] = CLARITY_USE_CONTINUATION_TOKEN
+            body['metricSelect'] = 'only *nowcast*'
             # body['format'] = 'csv-wide'
 
         redacted = json.loads(json.dumps(body))

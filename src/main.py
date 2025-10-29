@@ -1,5 +1,4 @@
 import argparse
-import json
 import sys
 from decimal import Decimal
 
@@ -9,13 +8,18 @@ from config import CONTINUATION_TOKEN_OUTPUT_PATH, QUERY_OUTPUT_PATH
 from config import RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH
 from config import S3_BUCKET_NAME, S3_UPLOAD_PATH, INDEX_OUTPUT_PATH
 
-from utils import write_txt, write_json_dict, write_csv, run_postprocessing, read_json_dict
+from utils import write_txt, write_json_dict, write_csv, run_postprocessing
 
 from clarity import ClarityAPI
 from s3 import S3API
 
 
 def main(args):
+    if args.index:
+        s3api = S3API()
+        s3api.generate_index_file()
+        sys.exit(0)
+
     if not args.fetch and not args.push:
         log.error('You must specify either -f (--fetch) or -p (--push)')
         sys.exit(200)
@@ -60,12 +64,7 @@ def main(args):
     # Push select files from the output folder to the proper destinations in S3
     if args.push:
         s3api = S3API()
-
-        # Grab top-level objects (folder, etc) from S3
-        # Also, append the folder that we are currently uploading :)
-        tlos = s3api.list_folders() + [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}']
-        with open(INDEX_OUTPUT_PATH, 'w') as f:
-            json.dump(tlos, f)
+        s3api.generate_index_file()
 
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
@@ -104,5 +103,7 @@ if __name__ == '__main__':
     #parser.add_argument('-l', '--locations',  action='store_false' if OUTPUT_LOCATIONS_AS_JSON else 'store_true', help='Also output locations from Clarity REST API v2')
     # Data cleanup will take place in between these two independent steps
     parser.add_argument('-p', '--push',  action='store_true',  help='Upload resulting output data to S3 (Minio or AWS S3)')
+    parser.add_argument('-i', '--index', action='store_true',
+                        help="Only generate index.json file. don't fetch or push")
 
     main(args=parser.parse_args())
