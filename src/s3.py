@@ -53,6 +53,7 @@ class S3API(object):
         # Also, append the folder that we are currently uploading :)
         tlos = self.list_folders() + [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}']
 
+        print(f'Generating {INDEX_OUTPUT_PATH}...')
         metadata = []
         for tlo in tlos:
             if 'index.json' in tlo or 'token.txt' in tlo or 'locations.json' in tlo:
@@ -61,11 +62,11 @@ class S3API(object):
             print (f'Analyzing {tlo}...')
             content, size = self.read_file(tlo)
             redacted = f'{json.loads(json.dumps(content))[:40]}...'
-            print(f'content = {redacted}')
-            print(f'size = {size}')
+            #print(f'content = {redacted}')
+            #print(f'size = {size}')
             earliest, latest = self.find_earliest_latest_timestamps(content=content)
-            print(f'earliest = {earliest}')
-            print(f'latest = {latest}')
+            #print(f'earliest = {earliest}')
+            #print(f'latest = {latest}')
             metadata.append({
                 'path': tlo,
                 'size': size,
