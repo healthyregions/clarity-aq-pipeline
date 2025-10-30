@@ -8,7 +8,7 @@ from config import CONTINUATION_TOKEN_OUTPUT_PATH, QUERY_OUTPUT_PATH
 from config import RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH
 from config import S3_BUCKET_NAME, S3_UPLOAD_PATH, INDEX_OUTPUT_PATH
 
-from utils import write_txt, write_json_dict, write_csv, run_postprocessing
+from utils import write_txt, write_json_dict, write_csv, run_postprocessing, convert_to_geojson
 
 from clarity import ClarityAPI
 from s3 import S3API
@@ -49,6 +49,9 @@ def main(args):
                 loc["lon"] = Decimal(loc["lon"]).quantize(Decimal('0.0000'))
             log.info(f'Writing locations to file: {LOCATIONS_OUTPUT_PATH}')
             write_json_dict(LOCATIONS_OUTPUT_PATH, locations)
+
+        # TODO: convert to geojson format
+        geojson = convert_to_geojson(data, locations)
 
         # Output metrics and run post-processing
         log.info(f'Writing data to file: {RAW_DATA_OUTPUT_PATH}')

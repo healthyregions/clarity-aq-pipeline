@@ -2,8 +2,11 @@ import json
 from decimal import Decimal
 
 import pandas as pd
-from pandas import DataFrame
+from pandas import DataFrame, value_counts
 from pathlib import Path
+
+from config import S3_UPLOAD_PATH
+
 
 # Shorthand helper functon for setting or defaulting a variable value
 def set_or_default(value, default):
@@ -55,3 +58,41 @@ def decimal_encoder(obj):
     if isinstance(obj, Decimal):
         return str(obj)
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
+
+
+def convert_to_geojson(data, locations):
+    location_map = {}
+    for location in locations:
+        datasourceId = location['datasourceId']
+        location_map[datasourceId] = {
+            'lon': Decimal(location["lon"]).quantize(Decimal('0.0000')),
+            'lat': Decimal(location["lat"]).quantize(Decimal('0.0000')),
+        }
+
+    collection_time = S3_UPLOAD_PATH
+
+    return {
+        'type': 'FeatureCollection',
+        'timestamp': collection_time,
+        'features': [
+            {
+                'type': 'Feature',
+                'properties': {
+                    'datasourceId': d['datasourceId'],
+                    'time': d['time'],
+                    'metric': d['metric'],
+                    'raw': d['raw'],
+                    'value': d['value'],
+                    'status': d['status'],
+                },
+                'geometry': {
+                    'type': 'Point',
+                    'coordinates': [
+                        location_map[d['datasourceId']]['lon'],
+                        location_map[d['datasourceId']]['lat']
+                    ]
+                }
+            } for d in data
+        ]
+    }
+
