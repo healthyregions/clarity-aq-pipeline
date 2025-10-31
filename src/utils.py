@@ -70,8 +70,7 @@ def to_geojson(data, locations, fetch_time):
         # The datasourceId for this sensor in Clarity's system
         datasourceId = d["datasourceId"]
 
-        # ISO Timestamp of when Clarity fetched the metric from the sensor
-        # Assumption: all metrics are collected at the same time
+        # ISO Timestamp corresponds to when Clarity fetched the metric from the sensor
         collection_time = d['time']
 
         # Multiple lines will share a datasourceId for different metrics at different timestamps
@@ -79,24 +78,23 @@ def to_geojson(data, locations, fetch_time):
 
         # Initialize this entry if it's not already present
         datasource_properties = properties[datasourceId] if datasourceId in properties else {
-                "time": collection_time,
                 "datasourceId": datasourceId,
 
                 # Initialize empty values to ensure consistent geojson features
-                # each of these will be the "value" from entry where "metric" == key
-                "pm10ConcMassNowcast": None,
-                "pm10ConcMassNowcastUsEpaAqi": None,
-                "pm2_5ConcMassNowcast": None,
-                "pm2_5ConcMassNowcastUsEpaAqi": None
+                # each line of CSV becomes a key-value in one of these maps
+                # each entry maps an ISO timestamp to the "value" of the metric collected at that timestamp
+                "pm10ConcMassNowcast": {},
+                "pm10ConcMassNowcastUsEpaAqi": {},
+                "pm2_5ConcMassNowcast": {},
+                "pm2_5ConcMassNowcastUsEpaAqi": {}
             }
 
-        # Assumption: data will always be ordered newest -> oldest
-        if datasource_properties[metric_name] is None:
-            # Overwrite particular metric from this line if we haven't seen a value 
+        if not datasource_properties[metric_name]:
+            # Overwrite particular metric value from this line
             # No need to preserve/store "raw" or "status"
-            datasource_properties['time'] = collection_time
-            datasource_properties[metric_name] = metric_value
+            datasource_properties[metric_name][collection_time] = metric_value
 
+        # Every new line yields new data, so we always save
         properties[datasourceId] = datasource_properties
 
     # iterate over locations to fill in latlong coordinates
