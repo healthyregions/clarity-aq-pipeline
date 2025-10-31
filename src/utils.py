@@ -89,10 +89,9 @@ def to_geojson(data, locations, fetch_time):
                 "pm2_5ConcMassNowcastUsEpaAqi": {}
             }
 
-        if not datasource_properties[metric_name]:
-            # Overwrite particular metric value from this line
-            # No need to preserve/store "raw" or "status"
-            datasource_properties[metric_name][collection_time] = metric_value
+        # Overwrite particular metric value from this line
+        # No need to preserve/store "raw" or "status"
+        datasource_properties[metric_name][collection_time] = metric_value
 
         # Every new line yields new data, so we always save
         properties[datasourceId] = datasource_properties
