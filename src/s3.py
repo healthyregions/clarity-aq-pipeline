@@ -48,6 +48,11 @@ class S3API(object):
         timestamps = [datetime.fromisoformat(val['time']) for val in content]
         return min(timestamps), max(timestamps)
 
+    def find_earliest_latest_timestamps_geojson(self, content):
+        # {"datasourceId":"DJHFB1439","time":"2025-10-23T20:00:00.000Z","metric":"no2Conc1HourMean","raw":-0.08,"value":7.73,"status":"calibrated-ready"},
+        timestamps = [datetime.fromisoformat(val.properties['time']) for val in content.features]
+        return min(timestamps), max(timestamps)
+
     def generate_index_file(self):
         # Grab top-level objects (folder, etc) from S3
         # Also, append the folder that we are currently uploading :)
@@ -60,20 +65,26 @@ class S3API(object):
                 print (f'Skipping {tlo}...')
                 continue
             print (f'Analyzing {tlo}...')
-            content, size = self.read_file(tlo)
-            redacted = f'{json.loads(json.dumps(content))[:40]}...'
-            #print(f'content = {redacted}')
-            #print(f'size = {size}')
-            earliest, latest = self.find_earliest_latest_timestamps(content=content)
-            #print(f'earliest = {earliest}')
-            #print(f'latest = {latest}')
-            metadata.append({
-                'path': tlo,
-                'size': size,
-                'startTime': earliest.isoformat(),
-                'endTime': latest.isoformat(),
-            })
-
+            if tlo.endswith('.json'):
+                print (f'Parsing {tlo} as JSON...')
+                content, size = self.read_file(tlo)
+                earliest, latest = self.find_earliest_latest_timestamps(content=content)
+                metadata.append({
+                    'path': tlo,
+                    'size': size,
+                    'startTime': earliest.isoformat(),
+                    'endTime': latest.isoformat(),
+                })
+            elif tlo.endswith('.geojson'):
+                print (f'Parsing {tlo} as GeoJSON...')
+                content, size = self.read_file(tlo)
+                earliest, latest = self.find_earliest_latest_timestamps_geojson(content=content)
+                metadata.append({
+                    'path': tlo,
+                    'size': size,
+                    'startTime': earliest.isoformat(),
+                    'endTime': latest.isoformat(),
+                })
         with open(INDEX_OUTPUT_PATH, 'w') as f:
             json.dump(metadata, f)
 

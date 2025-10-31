@@ -50,16 +50,17 @@ def main(args):
             log.info(f'Writing locations to file: {LOCATIONS_OUTPUT_PATH}')
             write_json_dict(LOCATIONS_OUTPUT_PATH, locations)
 
-        # TODO: convert to geojson format
-        geojson = convert_to_geojson(data, locations)
-
         # Output metrics and run post-processing
         log.info(f'Writing data to file: {RAW_DATA_OUTPUT_PATH}')
         write_csv(RAW_DATA_OUTPUT_PATH, data)
 
         # TODO: adjust after cleaning process is codified
         log.info(f'Running post-processing: {RAW_DATA_OUTPUT_PATH} -> {CLEANED_DATA_OUTPUT_PATH}')
-        run_postprocessing(RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH)
+        json_data = run_postprocessing(RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH)
+
+        # TODO: convert to geojson format
+        geojson = convert_to_geojson(json_data, locations, S3_UPLOAD_PATH)
+        write_json_dict(CLEANED_DATA_OUTPUT_PATH, geojson)
 
         log.info('Data fetched successfully!')
 
@@ -71,19 +72,9 @@ def main(args):
 
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
-            # Uncomment this line if we want to preserve raw (uncleaned) metrics from Clarity in S3
-            #f'{RAW_DATA_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/raw.csv'],
-
-            # Uncomment this line if we want to preserve returned locations data from each request
-            # NOTE: using continuation tokens means we may not get back the full list every time
-            # NOTE: we NEED TO fuzz the precision here - use 4 decimal places instead of 5
-            #f'{LOCATIONS_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/locations.json'],
-
-            # Uncomment this line if we want to preserve the query that was sent with each request
-            #f'{QUERY_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}/query.json'],
             f'{CLEANED_DATA_OUTPUT_PATH}': [
-                f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}.json',
-                f'{S3_BUCKET_NAME}/latest.json'
+                f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}.geojson',
+                f'{S3_BUCKET_NAME}/latest.geojson'
             ],
 
             # Include a list of the available files within the bucket
