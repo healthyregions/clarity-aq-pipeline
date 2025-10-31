@@ -68,12 +68,28 @@ def convert_to_geojson(data, locations, collection_time):
     properties = {}
     for d in data:
         datasourceId = d["datasourceId"]
+
+        # Initialze this entry if it's not already present
         if datasourceId not in properties:
-            properties[datasourceId] = {}
-        properties[datasourceId]['datasourceId'] = d['datasourceId']
-        properties[datasourceId]['time'] = d['time']
-        properties[datasourceId][d['metric']] = d['value']
+            properties[datasourceId] = {
+                "datasourceId": datasourceId,
+
+                # Assumption: all metrics are collected at the same time
+                "time": d['time'],
+
+                # Initialize empty values to ensure consistent geojson features
+                # Multiple lines will share a datasourceId for different metrics
+                # each of these will be the "value" from entry where "metric" == key
+                "pm10ConcMassNowcast": None,
+                "pm10ConcMassNowcastUsEpaAqi": None,
+                "pm2_5ConcMassNowcast": None,
+                "pm2_5ConcMassNowcastUsEpaAqi": None
+            }
+
         # No need to preserve/store "raw" value or "status"
+
+        # Overwrite particular metric from this line
+        properties[datasourceId][d['metric']] = d['value']
 
 
     # iterate over locations to fill in latlong coordinates
