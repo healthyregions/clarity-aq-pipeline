@@ -41,7 +41,7 @@ S3_STORAGE_CLASS = os.getenv('S3_STORAGE_CLASS', 'INTELLIGENT_TIERING')
 # Use S3_UPLOAD_PATH if given, otherwise use timestamp: 2025-10-02@16:41:25
 S3_UPLOAD_PATH = set_or_default(
     value=os.getenv('S3_UPLOAD_PATH', None),
-    default=datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d@%H:%M:%S')
+    default=datetime.datetime.now(datetime.UTC).isoformat(timespec='seconds')
 )
 
 
