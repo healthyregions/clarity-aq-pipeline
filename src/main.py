@@ -8,7 +8,7 @@ from config import CONTINUATION_TOKEN_OUTPUT_PATH, QUERY_OUTPUT_PATH
 from config import RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH
 from config import S3_BUCKET_NAME, S3_UPLOAD_PATH, INDEX_OUTPUT_PATH
 
-from utils import write_txt, write_json_dict, write_csv, run_postprocessing, convert_to_geojson
+from utils import write_txt, write_json_dict, write_csv, run_postprocessing, to_geojson
 
 from clarity import ClarityAPI
 from s3 import S3API
@@ -59,7 +59,7 @@ def main(args):
         json_data = run_postprocessing(RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH)
 
         # TODO: convert to geojson format
-        geojson = convert_to_geojson(json_data, locations, S3_UPLOAD_PATH)
+        geojson = to_geojson(json_data, locations, S3_UPLOAD_PATH)
         write_json_dict(CLEANED_DATA_OUTPUT_PATH, geojson)
 
         log.info('Data fetched successfully!')

@@ -63,22 +63,26 @@ def decimal_encoder(obj):
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
-def convert_to_geojson(data, locations, collection_time):
+def to_geojson(data, locations, fetch_time):
     # Read all metrics from each datasource into a map of properties
     properties = {}
     for d in data:
+        # The datasourceId for this sensor in Clarity's system
         datasourceId = d["datasourceId"]
 
-        # Initialze this entry if it's not already present
-        if datasourceId not in properties:
-            properties[datasourceId] = {
+        # ISO Timestamp of when Clarity fetched the metric from the sensor
+        # Assumption: all metrics are collected at the same time
+        collection_time = d['time']
+
+        # Multiple lines will share a datasourceId for different metrics at different timestamps
+        metric_name, metric_value = d['metric'], d['value']
+
+        # Initialize this entry if it's not already present
+        datasource_properties = properties[datasourceId] if datasourceId in properties else {
+                "time": collection_time,
                 "datasourceId": datasourceId,
 
-                # Assumption: all metrics are collected at the same time
-                "time": d['time'],
-
                 # Initialize empty values to ensure consistent geojson features
-                # Multiple lines will share a datasourceId for different metrics
                 # each of these will be the "value" from entry where "metric" == key
                 "pm10ConcMassNowcast": None,
                 "pm10ConcMassNowcastUsEpaAqi": None,
@@ -86,16 +90,20 @@ def convert_to_geojson(data, locations, collection_time):
                 "pm2_5ConcMassNowcastUsEpaAqi": None
             }
 
-        # No need to preserve/store "raw" value or "status"
+        # Assumption: data will always be ordered newest -> oldest
+        if datasource_properties[metric_name] is None:
+            # Overwrite particular metric from this line if we haven't seen a value 
+            # No need to preserve/store "raw" or "status"
+            datasource_properties['time'] = collection_time
+            datasource_properties[metric_name] = metric_value
 
-        # Overwrite particular metric from this line
-        properties[datasourceId][d['metric']] = d['value']
-
+        properties[datasourceId] = datasource_properties
 
     # iterate over locations to fill in latlong coordinates
     return {
         'type': 'FeatureCollection',
-        'timestamp': collection_time,
+        # ISO Timestamp of when we fetched the data from Clarity
+        'timestamp': fetch_time,
         'features': [
             {
                 'type': 'Feature',
