@@ -7,8 +7,9 @@ from config import log, IS_MINIO, S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY,
 from config import INDEX_OUTPUT_PATH, S3_UPLOAD_PATH, CLEANED_DATA_OUTPUT_PATH
 from config import S3_REGION, S3_STORAGE_CLASS, S3_BUCKET_NAME
 
-import s3fs
+from config import LATEST_DATA_OUTPUT_PATH, HISTORICAL_DATA_OUTPUT_PATH
 
+import s3fs
 
 # Build an S3 client using the given credentials + endpoint
 s3_client = s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KEY, client_kwargs={
@@ -32,11 +33,16 @@ class S3API(object):
 
     def read_file(self, path):
         # WARNING: filename collisions would be bad here
-        if S3_UPLOAD_PATH in path:
-            # this is the currently-queued upload - file only exists locally
-            with open(CLEANED_DATA_OUTPUT_PATH, 'r') as f:
+        if 'latest.geojson' in path:
+            # historical.geojson a currently-queued upload - file only exists locally
+            with open(LATEST_DATA_OUTPUT_PATH, 'r') as f:
                 json_contents = json.load(f)
-                return json_contents, os.stat(CLEANED_DATA_OUTPUT_PATH).st_size
+                return json_contents, os.stat(LATEST_DATA_OUTPUT_PATH).st_size
+        elif S3_UPLOAD_PATH in path or 'historicalHourly24h.geojson' in path:
+            # historical.geojson a currently-queued upload - file only exists locally
+            with open(HISTORICAL_DATA_OUTPUT_PATH, 'r') as f:
+                json_contents = json.load(f)
+                return json_contents, os.stat(HISTORICAL_DATA_OUTPUT_PATH).st_size
         else:
             # file does not exist locally - read from S3 bucket
             with s3_client.open(path, 'r') as f:
@@ -60,7 +66,7 @@ class S3API(object):
     def generate_index_file(self):
         # Grab top-level objects (folder, etc) from S3
         # Also, append the folder that we are currently uploading :)
-        tlos = self.list_folders() + [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}']
+        tlos = self.list_folders() + [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}.geojson']
 
         print(f'Generating {INDEX_OUTPUT_PATH}...')
         metadata = []
