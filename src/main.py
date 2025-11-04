@@ -7,8 +7,10 @@ from config import OUTPUT_LOCATIONS_AS_JSON, LOCATIONS_OUTPUT_PATH
 from config import CONTINUATION_TOKEN_OUTPUT_PATH, QUERY_OUTPUT_PATH
 from config import RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH
 from config import S3_BUCKET_NAME, S3_UPLOAD_PATH, INDEX_OUTPUT_PATH
+from config import HISTORICAL_DATA_OUTPUT_PATH, LATEST_DATA_OUTPUT_PATH
 
-from utils import write_txt, write_json_dict, write_csv, run_postprocessing, to_geojson
+from utils import write_txt, write_json_dict, write_csv
+from utils import run_postprocessing, to_geojson_simple, to_geojson_historical
 
 from clarity import ClarityAPI
 from s3 import S3API
@@ -17,7 +19,8 @@ from s3 import S3API
 def main(args):
     if args.index:
         s3api = S3API()
-        s3api.generate_index_file()
+        latest_timestamp = s3api.generate_index_file()
+        log.info(f'Generated index.json with latest_timestamp={latest_timestamp}')
         sys.exit(0)
 
     if not args.fetch and not args.push:
@@ -59,8 +62,13 @@ def main(args):
         json_data = run_postprocessing(RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH)
 
         # TODO: convert to geojson format
-        geojson = to_geojson(json_data, locations, S3_UPLOAD_PATH)
-        write_json_dict(CLEANED_DATA_OUTPUT_PATH, geojson)
+        log.info(f'Bundling historical GeoJSON (24h hourly): {HISTORICAL_DATA_OUTPUT_PATH}')
+        geojson_historical = to_geojson_historical(json_data, locations, S3_UPLOAD_PATH)
+        write_json_dict(HISTORICAL_DATA_OUTPUT_PATH, geojson_historical)
+
+        log.info(f'Bundling latest values as GeoJSON: {LATEST_DATA_OUTPUT_PATH}')
+        geojson_simple = to_geojson_simple(json_data, locations, S3_UPLOAD_PATH)
+        write_json_dict(LATEST_DATA_OUTPUT_PATH, geojson_simple)
 
         log.info('Data fetched successfully!')
 
@@ -68,14 +76,18 @@ def main(args):
     # Push select files from the output folder to the proper destinations in S3
     if args.push:
         s3api = S3API()
-        s3api.generate_index_file()
+        latest_timestamp = s3api.generate_index_file()
 
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
-            f'{CLEANED_DATA_OUTPUT_PATH}': [
-                f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}.geojson',
-                f'{S3_BUCKET_NAME}/latest.geojson'
+            # Upload historical (hourly past 24h) GeoJSON format
+            f'{HISTORICAL_DATA_OUTPUT_PATH}': [
+                f'{S3_BUCKET_NAME}/{latest_timestamp}.geojson',
+                f'{S3_BUCKET_NAME}/historicalHourly24h.geojson'
             ],
+
+            # Upload simple / latest GeoJSON format
+            f'{LATEST_DATA_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/latest.geojson'],
 
             # Include a list of the available files within the bucket
             f'{INDEX_OUTPUT_PATH}': [f'{S3_BUCKET_NAME}/index.json']

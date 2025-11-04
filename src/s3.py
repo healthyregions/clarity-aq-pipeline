@@ -45,12 +45,16 @@ class S3API(object):
 
     def find_earliest_latest_timestamps(self, content):
         # {"datasourceId":"DJHFB1439","time":"2025-10-23T20:00:00.000Z","metric":"no2Conc1HourMean","raw":-0.08,"value":7.73,"status":"calibrated-ready"},
-        timestamps = [datetime.fromisoformat(val['time']) for val in content]
+        timestamps = [datetime.fromisoformat(feature['time']) for feature in content]
         return min(timestamps), max(timestamps)
 
-    def find_earliest_latest_timestamps_geojson(self, content):
-        # {"datasourceId":"DJHFB1439","time":"2025-10-23T20:00:00.000Z","metric":"no2Conc1HourMean","raw":-0.08,"value":7.73,"status":"calibrated-ready"},
-        timestamps = [datetime.fromisoformat(val.properties['time']) for val in content.features]
+    def find_earliest_latest_timestamps_geojson_simple(self, content):
+        timestamps = [datetime.fromisoformat(feature['properties']['time']) for feature in content['features']]
+        return min(timestamps), max(timestamps)
+
+    def find_earliest_latest_timestamps_geojson_historical(self, content):
+        str_timestamps = content['features'][0]['properties']['pm2_5ConcMassNowcast'].keys()
+        timestamps = [datetime.fromisoformat(timestamp) for timestamp in str_timestamps]
         return min(timestamps), max(timestamps)
 
     def generate_index_file(self):
@@ -60,6 +64,7 @@ class S3API(object):
 
         print(f'Generating {INDEX_OUTPUT_PATH}...')
         metadata = []
+        latest_timestamp = None
         for tlo in tlos:
             if 'index.json' in tlo or 'token.txt' in tlo or 'locations.json' in tlo:
                 print (f'Skipping {tlo}...')
@@ -69,24 +74,30 @@ class S3API(object):
                 print (f'Parsing {tlo} as JSON...')
                 content, size = self.read_file(tlo)
                 earliest, latest = self.find_earliest_latest_timestamps(content=content)
-                metadata.append({
-                    'path': tlo,
-                    'size': size,
-                    'startTime': earliest.isoformat(),
-                    'endTime': latest.isoformat(),
-                })
             elif tlo.endswith('.geojson'):
                 print (f'Parsing {tlo} as GeoJSON...')
                 content, size = self.read_file(tlo)
-                earliest, latest = self.find_earliest_latest_timestamps_geojson(content=content)
-                metadata.append({
-                    'path': tlo,
-                    'size': size,
-                    'startTime': earliest.isoformat(),
-                    'endTime': latest.isoformat(),
-                })
+                if 'time' in content['features'][0]['properties']:
+                    earliest, latest = self.find_earliest_latest_timestamps_geojson_simple(content=content)
+                else:
+                    earliest, latest = self.find_earliest_latest_timestamps_geojson_historical(content=content)
+            else:
+                print (f'Unknown file/type: Skipping {tlo}...')
+                continue
+
+            latest_timestamp = latest if latest_timestamp is None or latest > latest_timestamp else latest_timestamp
+            metadata.append({
+                'path': tlo,
+                'size': size,
+                'startTime': earliest.isoformat(),
+                'endTime': latest.isoformat(),
+            })
         with open(INDEX_OUTPUT_PATH, 'w') as f:
-            json.dump(metadata, f)
+            json.dump(metadata, f, indent=4)
+
+        return latest_timestamp.strftime('%Y-%m-%dT%H:%M:%SZ')
+
+
 
     def push_to_s3(self, local_path: str, remote_path: str):
         # Determine destination within S3
