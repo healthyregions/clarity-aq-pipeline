@@ -68,27 +68,27 @@ class S3API(object):
         # Also, append the folder that we are currently uploading :)
         tlos = self.list_folders() + [f'{S3_BUCKET_NAME}/{S3_UPLOAD_PATH}.geojson']
 
-        print(f'Generating {INDEX_OUTPUT_PATH}...')
+        log.info(f'Generating {INDEX_OUTPUT_PATH}...')
         metadata = []
         latest_timestamp = None
         for tlo in tlos:
             if 'index.json' in tlo or 'token.txt' in tlo or 'locations.json' in tlo:
-                print (f'Skipping {tlo}...')
+                log.info (f'Skipping {tlo}...')
                 continue
-            print (f'Analyzing {tlo}...')
+            log.info(f'Analyzing {tlo}...')
             if tlo.endswith('.json'):
-                print (f'Parsing {tlo} as JSON...')
+                log.info (f'Parsing {tlo} as JSON...')
                 content, size = self.read_file(tlo)
                 earliest, latest = self.find_earliest_latest_timestamps(content=content)
             elif tlo.endswith('.geojson'):
-                print (f'Parsing {tlo} as GeoJSON...')
+                log.info (f'Parsing {tlo} as GeoJSON...')
                 content, size = self.read_file(tlo)
                 if 'time' in content['features'][0]['properties']:
                     earliest, latest = self.find_earliest_latest_timestamps_geojson_simple(content=content)
                 else:
                     earliest, latest = self.find_earliest_latest_timestamps_geojson_historical(content=content)
             else:
-                print (f'Unknown file/type: Skipping {tlo}...')
+                log.info(f'Unknown file/type: Skipping {tlo}...')
                 continue
 
             latest_timestamp = latest if latest_timestamp is None or latest > latest_timestamp else latest_timestamp
