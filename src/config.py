@@ -41,7 +41,21 @@ S3_STORAGE_CLASS = os.getenv('S3_STORAGE_CLASS', 'INTELLIGENT_TIERING')
 # Use S3_UPLOAD_PATH if given, otherwise use timestamp: 2025-10-02@16:41:25
 S3_UPLOAD_PATH = set_or_default(
     value=os.getenv('S3_UPLOAD_PATH', None),
-    default=datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%d@%H:%M:%S')
+    # Python's datetime does not support military timezone suffixes like 'Z' suffix for UTC
+    # see https://stackoverflow.com/a/42777551
+    # The following simple string replacement does the trick:
+    default=datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
+    #
+    # Javascript can parse ISO format as a date string and localize to a timezone:
+    #
+    #   // Convert ISO to user's current locale
+    #   // NOTE: Z means we are assuming the input date is in UTC
+    #   timestamp = new Date('2025-11-03T22:00:00Z')
+    #    >  Mon Nov 03 2025 16:00:00 GMT-0600 (Central Standard Time)
+    #
+    #   // Convert/display this date in en-US locale for the America/Chicago time zone
+    #   timestamp.toLocaleString('en-US', { timeZone: 'America/Chicago' })
+    #    >  '11/3/2025, 4:00:00 PM'
 )
 
 
@@ -49,6 +63,8 @@ S3_UPLOAD_PATH = set_or_default(
 LOCAL_OUTPUT_DIR = os.getenv('LOCAL_OUTPUT_DIR', '/usr/app/data')
 RAW_DATA_OUTPUT_PATH = os.getenv('RAW_DATA_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/raw.csv')
 CLEANED_DATA_OUTPUT_PATH = os.getenv('CLEANED_DATA_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/cleaned.json')
+HISTORICAL_DATA_OUTPUT_PATH = os.getenv('HISTORICAL_DATA_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/historical.geojson')
+LATEST_DATA_OUTPUT_PATH = os.getenv('LATEST_DATA_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/latest.geojson')
 INDEX_OUTPUT_PATH = os.getenv('INDEX_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/index.json')
 
 CONTINUATION_TOKEN_OUTPUT_PATH = os.getenv('CONTINUATION_TOKEN_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/token.txt')
