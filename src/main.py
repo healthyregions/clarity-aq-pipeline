@@ -48,8 +48,8 @@ def main(args):
             # Scrub locations before uploading
             log.info(f'Fuzzing locations to 4 decimal places of precision...')
             for loc in locations:
-                loc["lat"] = Decimal(loc["lat"]).quantize(Decimal('0.0000'))
-                loc["lon"] = Decimal(loc["lon"]).quantize(Decimal('0.0000'))
+                loc["lat"] = float(Decimal(loc["lat"]).quantize(Decimal('0.0000')))
+                loc["lon"] = float(Decimal(loc["lon"]).quantize(Decimal('0.0000')))
             log.info(f'Writing locations to file: {LOCATIONS_OUTPUT_PATH}')
             write_json_dict(LOCATIONS_OUTPUT_PATH, locations)
 
