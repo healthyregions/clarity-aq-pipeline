@@ -59,7 +59,7 @@ def run_postprocessing(input_path: str, output_path: str):
 # Using a custom default function for json.dumps
 def decimal_encoder(obj):
     if isinstance(obj, Decimal):
-        return str(obj)
+        return float(obj)
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
 
