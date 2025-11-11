@@ -1,6 +1,10 @@
 #!/bin/bash
 set -e
 
+# Starting MinIO container
+echo "Ensuring MinIO container is running..."
+docker compose --profile minio up -d --remove-orphans
+
 # Clear out stale data from previous runs before running again
 # TODO: make this an option?
 echo -n "Clearing previous run data."
