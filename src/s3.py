@@ -49,19 +49,27 @@ class S3API(object):
                 json_contents = json.load(f)
                 return json_contents, s3_client.stat(path)['size']
 
+    # Given a list of ISO/UTC timestamps, return earliest/latest dates
+    def find_earliest_latest_timestamps_from_list(self, timestamps):
+        # ["2025-10-23T20:00:00.000Z","2025-10-23T21:00:00.000Z","2025-10-23T22:00:00.000Z"]
+        timestamps = [datetime.fromisoformat(t) for t in timestamps]
+        return min(timestamps), max(timestamps)
+
+    # Given a data response from Clarity (array of metrics a la CSV), return earliest/latest dates
     def find_earliest_latest_timestamps(self, content):
         # {"datasourceId":"DJHFB1439","time":"2025-10-23T20:00:00.000Z","metric":"no2Conc1HourMean","raw":-0.08,"value":7.73,"status":"calibrated-ready"},
-        timestamps = [datetime.fromisoformat(feature['time']) for feature in content]
-        return min(timestamps), max(timestamps)
+        timestamps = [f['time'] for f in content]
+        return self.find_earliest_latest_timestamps_from_list(timestamps)
 
+    # Given our "simple" GeoJSON format, return earliest/latest dates
     def find_earliest_latest_timestamps_geojson_simple(self, content):
-        timestamps = [datetime.fromisoformat(feature['properties']['time']) for feature in content['features']]
-        return min(timestamps), max(timestamps)
+        timestamps = [f['properties']['time'] for f in content['features']]
+        return self.find_earliest_latest_timestamps_from_list(timestamps)
 
+    # Given our "historical" GeoJSON format, return earliest/latest dates
     def find_earliest_latest_timestamps_geojson_historical(self, content):
-        str_timestamps = content['features'][0]['properties']['pm2_5ConcMassNowcast'].keys()
-        timestamps = [datetime.fromisoformat(timestamp) for timestamp in str_timestamps]
-        return min(timestamps), max(timestamps)
+        timestamps = content['features'][0]['properties']['pm2_5ConcMassNowcast'].keys()
+        return self.find_earliest_latest_timestamps_from_list(timestamps)
 
     def generate_index_file(self):
         # Grab top-level objects (folder, etc) from S3
