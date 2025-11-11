@@ -87,6 +87,7 @@ def to_geojson(locations, properties, fetch_time):
 def to_geojson_simple(data, locations, fetch_time):
     # Read all metrics from each datasource into a map of properties
     properties = {}
+
     for d in data:
         # The datasourceId for this sensor in Clarity's system
         datasourceId = d["datasourceId"]
@@ -112,8 +113,8 @@ def to_geojson_simple(data, locations, fetch_time):
             }
 
         # Assumption: data will always be ordered newest -> oldest
-        if datasource_properties[metric_name] is None:
-            # Overwrite particular metric from this line if we haven't seen a value
+        if datasource_properties[metric_name] is None and collection_time > datasource_properties['time']:
+            # Overwrite particular metric from this line if we haven't seen a value, or if this value is later
             # No need to preserve/store "raw" or "status"
             datasource_properties['time'] = collection_time
             datasource_properties[metric_name] = metric_value
