@@ -77,15 +77,23 @@ class ClarityAPI(object):
         if 'continuationToken' in redacted:
             redacted['continuationToken'] = f'{body["continuationToken"][:20]}...'
 
+        # WARNING: the `POST /report-requests` endpoint has a limit of 30 new reports per day
+        # After that, HTTP 429 will be returned indicating that the user needs to wait
+
+        # TODO: Handle passed-in parameters for report_id?
+        # This might help us workaround the 30 reports / day limit during testing and development testing
+
         try:
             # Request a new report for the past month as per-minute data
-            log.info(f'Submitting query: {redacted}')
-            #r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
-            #r.raise_for_status()
-            #log.debug(r.text)
+           log.info(f'Submitting query: {redacted}')
+            r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
+            r.raise_for_status()
+            log.debug(r.text)
             # format: {"reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing", "report": "datasource-measurements", "urls": [], "query": {"datasourceIds": ["DZFUM1742", "DRJLK4822", ,,, ], "endTime": "2025-11-01T00:00:00.000Z", "outputFrequency": "minute", "startTime": "2025-10-01T00:00:00.000Z", "format": "csv-wide", "metricLabelStyle": "canonical", "qcAssessment": true, "qcFlags": true}}
-            #report_processing = to_json(pd.read_csv(StringIO(r.text)))
-            report_processing = { "reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing" }
+            report_processing = to_json(pd.read_csv(StringIO(r.text)))
+
+            # Uncomment for testing
+            #report_processing = { "reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing" }
 
             # Poll for the report that we submitted
             report_id = report_processing['reportId']
