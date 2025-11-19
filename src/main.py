@@ -2,7 +2,7 @@ import argparse
 import sys
 from decimal import Decimal
 
-from config import log, CLARITY_HOSTNAME, CLARITY_USE_CONTINUATION_TOKEN
+from config import log, CLARITY_HOSTNAME, CLARITY_USE_CONTINUATION_TOKEN, MONTHLY_START_TIME, MONTHLY_END_TIME
 from config import OUTPUT_LOCATIONS_AS_JSON, LOCATIONS_OUTPUT_PATH
 from config import CONTINUATION_TOKEN_OUTPUT_PATH, QUERY_OUTPUT_PATH
 from config import RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH
@@ -21,6 +21,22 @@ def main(args):
         s3api = S3API()
         latest_timestamp = s3api.generate_index_file()
         log.info(f'Generated index.json with latest_timestamp={latest_timestamp}')
+        sys.exit(0)
+
+    if args.monthly:
+        log.info('Computing monthly average...')
+        log.info(f'    Start time: {MONTHLY_START_TIME}')
+        log.info(f'    End time  : {MONTHLY_END_TIME}')
+        clarity = ClarityAPI()
+        result = clarity.fetch_sensor_data_monthly()
+        if not result:
+            log.fatal('Monthly data fetch was not successful')
+            sys.exit(101)
+
+        # Output metrics and run post-processing
+        #log.info(f'Writing data to file: {RAW_DATA_OUTPUT_PATH}')
+        #write_csv(RAW_DATA_OUTPUT_PATH, data)
+
         sys.exit(0)
 
     if not args.fetch and not args.push:
@@ -111,5 +127,6 @@ if __name__ == '__main__':
     parser.add_argument('-p', '--push',  action='store_true',  help='Upload resulting output data to S3 (Minio or AWS S3)')
     parser.add_argument('-i', '--index', action='store_true',
                         help="Only generate index.json file. don't fetch or push")
-
+    parser.add_argument('-m', '--monthly', action='store_true',
+                        help="Compute monthly average data (may take awhile)")
     main(args=parser.parse_args())

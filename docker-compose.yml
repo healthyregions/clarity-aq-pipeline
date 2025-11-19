@@ -51,6 +51,19 @@ services:
       - ./data:/usr/app/data/
 
 
+  claritymonthly:
+    image: ghcr.io/healthyregions/clarity-aq-pipeline
+    env_file:
+      - .env
+    build:
+      context: .
+    profiles: ["pipeline"]
+    command: ['--monthly']
+    network_mode: host
+    volumes:
+      - ./data:/usr/app/data/
+
+
 #  datacleanup:
 #    image: herop/claritydatacleanup
 #    working_dir: /home/rstudio

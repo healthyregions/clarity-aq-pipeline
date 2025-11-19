@@ -71,15 +71,12 @@ def to_geojson(locations, properties, fetch_time):
         'features': [
             {
                 'type': 'Feature',
-                'properties': properties[location['datasourceId']],
+                'properties': properties[loc['datasourceId']],
                 'geometry': {
                     'type': 'Point',
-                    'coordinates': [
-                        Decimal(location['lon']).quantize(Decimal('0.0000')),
-                        Decimal(location['lat']).quantize(Decimal('0.0000'))
-                    ]
+                    'coordinates': [ loc['lon'], loc['lat'] ]
                 }
-            } for location in locations
+            } for loc in locations
         ]
     }
 

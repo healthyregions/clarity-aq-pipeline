@@ -1,13 +1,19 @@
 #!/bin/bash
 set -e
 
+# Create data directory if it doesn't exist
+# We do this manually here so that the folder is owned by the correct user
+# NOTE: if Docker daemon creates this folder automatically, you can see file permission issues
+#   Workaround is to delete the ./data folder and create it manually using mkdir
+mkdir -p ./data/
+
 # Starting MinIO container
 echo "Ensuring MinIO container is running..."
 docker compose --profile minio up -d --remove-orphans
 
 # Clear out stale data from previous runs before running again
 # TODO: make this an option?
-echo -n "Clearing previous run data."
+echo -n "Clearing any previous run data."
 sleep 1s
 echo -n "."
 rm -rf ./data/*
