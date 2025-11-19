@@ -64,18 +64,15 @@ services:
       - ./data:/usr/app/data/
 
 
-#  datacleanup:
-#    image: herop/claritydatacleanup
-#    working_dir: /home/rstudio
-#    build:
-#      context: .
-#      dockerfile: Dockerfile.r
-#    volumes:
-#      - ./data:/usr/app/data/
-#    profiles: ["pipeline"]
-#    #depends_on:
-#    #  clarityfetch:
-#    #    condition: service_completed_successfully
+  datacleanup:
+    image: herop/claritydatacleanup
+    working_dir: /home/rstudio
+    build:
+      context: .
+      dockerfile: Dockerfile.r
+    volumes:
+      - ./data:/home/rstudio/data/
+    profiles: ["pipeline"]
 
 
   s3push:
