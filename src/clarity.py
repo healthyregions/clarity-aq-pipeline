@@ -85,7 +85,7 @@ class ClarityAPI(object):
 
         try:
             # Request a new report for the past month as per-minute data
-           log.info(f'Submitting query: {redacted}')
+            log.info(f'Submitting query: {redacted}')
             r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
             r.raise_for_status()
             log.debug(r.text)
