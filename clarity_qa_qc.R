@@ -4,8 +4,11 @@ library(tidyr)
 library(purrr)
 library(slider)
 
-raw_minute_csv_path <- Sys.getenv("MONTHLY_RAW_OUPUT_PATH", unset = "./data/monthly-raw-0.csv")
-df <- readr::read_csv(raw_minute_csv_path)
+# Read configuration from environment variables
+raw_minute_input_path <- Sys.getenv("MONTHLY_RAW_INPUT_PATH", unset = "./data/monthly-raw-0.csv")
+raw_minute_output_dir <- Sys.getenv("MONTHLY_CLEANED_OUTPUT_DIR", unset = "./data/")
+
+df <- readr::read_csv(raw_minute_input_path)
 
 # Step 1
 # PM2.5 measurements
@@ -316,3 +319,11 @@ sensor_hourly_comp <- hourly %>%
   )
 
 print(head(sensor_hourly_comp))
+
+daily_output_file <- paste(raw_minute_output_dir, "daily-cleaned-0.json", sep = "")
+hourly_output_file <- paste(raw_minute_output_dir, "hourly-cleaned-0.json", sep = "")
+summary_output_file <- paste(raw_minute_output_dir, "summary-cleaned-0.json", sep = "")
+
+jsonlite::write_json(df_daily, daily_output_file, pretty = FALSE)
+jsonlite::write_json(df_hourly, hourly_output_file, pretty = FALSE)
+jsonlite::write_json(sensor_hourly_comp, summary_output_file, pretty = FALSE)

@@ -2,7 +2,7 @@ FROM rocker/tidyverse
 WORKDIR /home/rstudio
 
 # Install R dependencies
-RUN R -e "install.packages(c('dplyr', 'slider'))"
+RUN R -e "install.packages(c('dplyr', 'slider', 'jsonlite'))"
 
 # TODO: Install R dependencies? anything needed?
 # Install R scripts

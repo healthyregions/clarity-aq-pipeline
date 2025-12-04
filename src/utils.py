@@ -62,6 +62,9 @@ def decimal_encoder(obj):
         return float(obj)
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
+def csv_to_geojson(fetch_time):
+    df = pd.read_csv(f'{fetch_time}.csv')
+    df.to_json(f'{fetch_time}.json')
 
 def to_geojson(locations, properties, fetch_time):
     return {

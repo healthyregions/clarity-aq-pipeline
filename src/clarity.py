@@ -8,7 +8,7 @@ import requests
 
 from config import log, CLARITY_HOSTNAME, CLARITY_ORG_NAME, CLARITY_API_KEY, CLARITY_USE_CONTINUATION_TOKEN
 from config import CONTINUATION_TOKEN_OUTPUT_PATH, S3_BUCKET_NAME
-from config import MONTHLY_START_TIME, MONTHLY_END_TIME, MONTHLY_DATA_OUTPUT_PATH
+from config import MONTHLY_START_TIME, MONTHLY_END_TIME, CLARITY_REPORT_ID
 from utils import from_json, to_json, write_txt
 
 from s3 import s3_client
@@ -16,7 +16,7 @@ from s3 import s3_client
 import os
 import sys
 
-freq = os.getenv('OPERATION', 'hourly')
+OPERATION = os.getenv('OPERATION', 'hourly')
 
 # globals: S3_BUCKET_NAME, CLARITY_API_KEY, CLARITY_ORG_NAME, CONTINUATION_TOKEN_OUTPUT_PATH, s3_client
 class ClarityAPI(object):
@@ -53,7 +53,6 @@ class ClarityAPI(object):
 
 
 
-    # Example: curl https://clarity-data-api.clarity.io/v2/recent-datasource-measurements-query -H 'Content-Type: application/json' -H 'x-api-key: ${CLARITY_API_KEY}' -H 'Accept: application/json' -d '{'org':'cityof58A9','allDatasources':true,'replyWithContinuationToken':true,'outputFrequency':'hour','format':'csv-wide'}' -vvvv
     # Fetch per-minute metrics from the previous month in JSON format
     def fetch_sensor_data_monthly(self):
         token = self.read_continuation_token()
@@ -84,43 +83,40 @@ class ClarityAPI(object):
         # This might help us workaround the 30 reports / day limit during testing and development testing
 
         try:
-            # Request a new report for the past month as per-minute data
-            log.info(f'Submitting query: {redacted}')
-            r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
-            r.raise_for_status()
-            log.debug(r.text)
-            # format: {"reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing", "report": "datasource-measurements", "urls": [], "query": {"datasourceIds": ["DZFUM1742", "DRJLK4822", ,,, ], "endTime": "2025-11-01T00:00:00.000Z", "outputFrequency": "minute", "startTime": "2025-10-01T00:00:00.000Z", "format": "csv-wide", "metricLabelStyle": "canonical", "qcAssessment": true, "qcFlags": true}}
-            report_processing = to_json(pd.read_csv(StringIO(r.text)))
+            global CLARITY_REPORT_ID
+            if CLARITY_REPORT_ID == '':
+                # Request a new report for the past month as per-minute data
+                log.info(f'Submitting query: {redacted}')
+                r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
+                r.raise_for_status()
+                # format: {"reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing", "report": "datasource-measurements", "urls": [], "query": {"datasourceIds": ["DZFUM1742", "DRJLK4822", ,,, ], "endTime": "2025-11-01T00:00:00.000Z", "outputFrequency": "minute", "startTime": "2025-10-01T00:00:00.000Z", "format": "csv-wide", "metricLabelStyle": "canonical", "qcAssessment": true, "qcFlags": true}}
+                report_processing = r.json()
+                log.debug(report_processing)
 
-            # Uncomment for testing
-            #report_processing = { "reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing" }
+                # Uncomment for testing
+                #report_processing = { "reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing" }
 
-            # Poll for the report that we submitted
-            report_id = report_processing['reportId']
-            while report_processing['reportStatus'] == 'in-progress' and report_processing['message'] == 'Processing':
+                # Poll for the report that we submitted
+                CLARITY_REPORT_ID = report_processing['reportId']
+            else:
+                report_processing = None
+
+            while report_processing is None or report_processing['reportStatus'] == 'in-progress' and report_processing['message'] == 'Processing':
                 # Format: "reportId": "JBLLZT8NW9", "reportStatus": "succeeded", "message": "Ready", "report": "datasource-measurements", "urls": ["https://combined-measurements-export-prd.s3.amazonaws.com/historical/JBLLZT8NW9/JBLLZT8NW9.csv.gz?..."], "query": {"datasourceIds": ["DZFUM1742", "DZQSX5311", ... ], "endTime": "2025-11-01T00:00:00.000Z", "outputFrequency": "minute", "startTime": "2025-10-01T00:00:00.000Z", "format": "csv-wide", "metricLabelStyle": "canonical", "qcAssessment": true, "qcFlags": true}, "urlsExpireAt": "2025-11-19T18:40:20.249Z"}
                 log.debug(self.reportsUrl)
-                r = requests.get(url=self.reportsUrl.format(report_id=report_id), headers=self.headers)
+                r = requests.get(url=self.reportsUrl.format(report_id=CLARITY_REPORT_ID), headers=self.headers)
                 r.raise_for_status()
                 report_processing = r.json()
                 log.info(f'Poll status: {report_processing}')
 
-                if 'url' not in report_processing:
+                if 'urls' not in report_processing:
                     log.debug('Report not yet ready - waiting 5 seconds to poll again...')
                     sleep(5)
                     continue
                 elif report_processing['reportStatus'] == 'succeeded' and report_processing['message'] == 'Ready':
                     break
 
-            urls = report_processing['urls']
-            for url in urls:
-                idx = urls.index(url)
-                r = requests.get(url=url)
-                r.raise_for_status()
-                report_contents = r.text
-                write_txt(MONTHLY_DATA_OUTPUT_PATH.format(index=idx), report_contents)
-
-            return True
+            return report_processing['urls']
 
         except requests.exceptions.ConnectionError as ex:
             self.log_exception(ex, 'Connection Error: Could not connect to the server')

@@ -1,8 +1,10 @@
 import argparse
 import sys
-from decimal import Decimal
 
-from config import log, CLARITY_HOSTNAME, CLARITY_USE_CONTINUATION_TOKEN, MONTHLY_START_TIME, MONTHLY_END_TIME
+import requests
+
+from config import log, CLARITY_HOSTNAME, CLARITY_USE_CONTINUATION_TOKEN
+from config import MONTHLY_START_TIME, MONTHLY_END_TIME, MONTHLY_DATA_OUTPUT_PATH
 from config import OUTPUT_LOCATIONS_AS_JSON, LOCATIONS_OUTPUT_PATH
 from config import CONTINUATION_TOKEN_OUTPUT_PATH, QUERY_OUTPUT_PATH
 from config import RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH
@@ -28,14 +30,24 @@ def main(args):
         log.info(f'    Start time: {MONTHLY_START_TIME}')
         log.info(f'    End time  : {MONTHLY_END_TIME}')
         clarity = ClarityAPI()
-        result = clarity.fetch_sensor_data_monthly()
-        if not result:
+        urls = clarity.fetch_sensor_data_monthly()
+
+        for url in urls:
+            idx = urls.index(url)
+            r = requests.get(url=url)
+            r.raise_for_status()
+            report_contents = r.text
+            write_txt(MONTHLY_DATA_OUTPUT_PATH.format(index=idx), report_contents)
+
+        if not urls:
             log.fatal('Monthly data fetch was not successful')
             sys.exit(101)
 
         # Output metrics and run post-processing
         #log.info(f'Writing data to file: {RAW_DATA_OUTPUT_PATH}')
         #write_csv(RAW_DATA_OUTPUT_PATH, data)
+
+        log.info('Monthly data fetched successfully!')
 
         sys.exit(0)
 
@@ -58,14 +70,9 @@ def main(args):
         log.info(f'Writing query to file: {QUERY_OUTPUT_PATH}')
         write_json_dict(QUERY_OUTPUT_PATH, query)
 
-        # Since we're using continuation tokens, this
-        # won't be the full list of locations every time
+        # Note that this may not be the full list of locations every time
+        # If a sensor sends no metrics in the given timeframe, they may not appear in the list
         if OUTPUT_LOCATIONS_AS_JSON:
-            # Scrub locations before uploading
-            log.info(f'Fuzzing locations to 4 decimal places of precision...')
-            for loc in locations:
-                loc["lat"] = Decimal(loc["lat"]).quantize(Decimal('0.0000'))
-                loc["lon"] = Decimal(loc["lon"]).quantize(Decimal('0.0000'))
             log.info(f'Writing locations to file: {LOCATIONS_OUTPUT_PATH}')
             write_json_dict(LOCATIONS_OUTPUT_PATH, locations)
 
@@ -77,7 +84,7 @@ def main(args):
         log.info(f'Running post-processing: {RAW_DATA_OUTPUT_PATH} -> {CLEANED_DATA_OUTPUT_PATH}')
         json_data = run_postprocessing(RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH)
 
-        # TODO: convert to geojson format
+        # convert to geojson format
         log.info(f'Bundling historical GeoJSON (24h hourly): {HISTORICAL_DATA_OUTPUT_PATH}')
         geojson_historical = to_geojson_historical(json_data, locations, S3_UPLOAD_PATH)
         write_json_dict(HISTORICAL_DATA_OUTPUT_PATH, geojson_historical)

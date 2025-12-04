@@ -23,6 +23,9 @@ CLARITY_API_KEY = os.getenv('CLARITY_API_KEY')
 CLARITY_USE_CONTINUATION_TOKEN = os.getenv('CLARITY_USE_CONTINUATION_TOKEN', 'falso').lower() in ('true', '1', 't')
 CLARITY_HOSTNAME = 'https://clarity-data-api.clarity.io/v2'
 
+# For monthly report, allow user to specify a previous report
+CLARITY_REPORT_ID = os.getenv('CLARITY_REPORT_ID', '')
+
 # S3 Endpoint URL: use default for AWS S3 or override for MinIO (e.g. http://localhost:9000)
 S3_ENDPOINT_URL = os.getenv('S3_ENDPOINT_URL', None)
 
