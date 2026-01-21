@@ -48,7 +48,7 @@ services:
     #command: ['--recent']
     network_mode: host
     volumes:
-      - ./data:/usr/app/data/
+      - ./data:/home/rstudio/data/
 
 
   datacleanup:
@@ -72,7 +72,7 @@ services:
     command: ['--push']
     network_mode: host
     volumes:
-      - ./data:/usr/app/data/
+      - ./data:/home/rstudio/data/
     profiles: ["pipeline"]
     #depends_on:
     #  clarityfetch:

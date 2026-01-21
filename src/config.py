@@ -90,7 +90,7 @@ HISTORICAL_END_TIME = set_or_default(
 )
 
 # Local directory that will be uploaded to the bucket
-LOCAL_OUTPUT_DIR = os.getenv('LOCAL_OUTPUT_DIR', '/usr/app/data')
+LOCAL_OUTPUT_DIR = os.getenv('LOCAL_OUTPUT_DIR', '/home/rstudio/data')
 RAW_DATA_OUTPUT_PATH = os.getenv('RAW_DATA_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/raw.csv')
 CLEANED_DATA_OUTPUT_PATH = os.getenv('CLEANED_DATA_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/cleaned.json')
 HISTORICAL_DATA_OUTPUT_PATH = os.getenv('HISTORICAL_DATA_OUTPUT_PATH', f'{LOCAL_OUTPUT_DIR}/historical.geojson')
