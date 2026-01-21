@@ -37,7 +37,7 @@ def main(args):
     # Fetch recent measurements from the clarity API
     # Write raw metrics (uncleaned) into the output folder
     if args.recent:
-        log.debug(f'Fetching recent measurements from {CLARITY_HOSTNAME}')
+        log.info(f'Fetching recent measurement data from: {CLARITY_HOSTNAME}')
         clarity = RecentMeasurements()
         csv_contents = clarity.recent_fetch_metrics()
 
@@ -52,7 +52,7 @@ def main(args):
     # Fetch historical measurements from the clarity API
     # Write raw metrics (uncleaned) into the output folder
     if args.historical:
-        log.info('Computing historical average...')
+        log.info(f'Fetching historical measurement data from: {CLARITY_HOSTNAME}')
         log.info(f'    Start time: {HISTORICAL_START_TIME}')
         log.info(f'    End time  : {HISTORICAL_END_TIME}')
         clarity = HistoricalMeasurements()
@@ -71,6 +71,12 @@ def main(args):
     if args.push:
         s3api = S3API()
         latest_timestamp = s3api.generate_index_file()
+
+        # TODO: Fetch existing parquet file, if one exists in S3
+        # TODO: Create a new parquet file if one doesn't exist
+        # TODO: Merge new data into parquet file
+        # TODO: Yearly process to move existing parquet data into a folder labeled with the year.
+        #     This should prevent each file from getting too large as the years stretch on.
 
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
