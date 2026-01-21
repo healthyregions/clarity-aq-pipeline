@@ -408,7 +408,7 @@ sensor_hourly_comp <- hourly %>%
 print(head(sensor_hourly_comp))
 
 # Read OUTPUT_FORMAT envvar - possible values are json, csv, parquet (default)
-output_format <- tolower(Sys.getenv("OUTPUT_FORMAT", unset = ""))
+output_format <- tolower(Sys.getenv("OUTPUT_FORMAT", unset = "csv"))
 
 # Build up file name based on dataframe name + output_format (default=parquet)
 summary_daily_file <- paste(raw_minute_output_dir, "summary-daily-0.", output_format, sep = "")
