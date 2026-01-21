@@ -1,22 +1,11 @@
-import json
-import os
-from io import StringIO
-from time import sleep
-
-import pandas as pd
-import requests
 from requests import RequestException, Response
-from urllib3.exceptions import HTTPError
+import sys
 
 from config import log, CLARITY_HOSTNAME, CLARITY_ORG_NAME, CLARITY_API_KEY, CLARITY_USE_CONTINUATION_TOKEN
 from config import CONTINUATION_TOKEN_OUTPUT_PATH, S3_BUCKET_NAME
-from config import HISTORICAL_START_TIME, HISTORICAL_END_TIME, CLARITY_REPORT_ID
-from utils import redact, from_json, to_json, write_txt
-
 from s3 import s3_client
+from utils import from_json
 
-import os
-import sys
 
 # globals: S3_BUCKET_NAME, CLARITY_API_KEY, CLARITY_ORG_NAME, CONTINUATION_TOKEN_OUTPUT_PATH, s3_client
 class ClarityAPI(object):

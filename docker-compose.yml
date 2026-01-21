@@ -38,6 +38,7 @@ services:
       minio:
         condition: service_healthy
 
+
   clarityfetch:
     image: ghcr.io/healthyregions/clarity-aq-pipeline
     env_file:
@@ -49,18 +50,6 @@ services:
     network_mode: host
     volumes:
       - ./data:/home/rstudio/data/
-
-
-  datacleanup:
-    image: herop/claritydatacleanup
-    working_dir: /home/rstudio
-    build:
-      context: .
-      dockerfile: Dockerfile.r
-    volumes:
-      - ./data:/home/rstudio/data/
-    profiles: ["pipeline"]
-    #command: ['--recent']
 
 
   s3push:
@@ -79,3 +68,4 @@ services:
     #    condition: service_completed_successfully
     #  datacleanup:
     #    condition: service_completed_successfully
+

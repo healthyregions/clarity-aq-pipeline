@@ -1,12 +1,13 @@
-# All environment variables that control behavior that clarity-aq-pipeline are defined here
+# All environment variables that control behavior of the clarity-aq-pipeline are defined here
 
 import datetime
 import logging
 import os
 
-from pandas.core.common import maybe_iterable_to_list
 
-from utils import set_or_default
+# Shorthand helper functon for setting or defaulting a variable value
+def set_or_default(value, default):
+    return value if value else default
 
 # Configure logging based on user input
 LOGLEVEL = set_or_default(

@@ -1,24 +1,12 @@
 import json
-import os
-from io import StringIO
+import requests
+import sys
 from time import sleep
 
-import pandas as pd
-import requests
-from requests import RequestException, Response
-from urllib3.exceptions import HTTPError
-
-from config import log, CLARITY_HOSTNAME, CLARITY_ORG_NAME, CLARITY_API_KEY, CLARITY_USE_CONTINUATION_TOKEN
-from config import CONTINUATION_TOKEN_OUTPUT_PATH, S3_BUCKET_NAME
-from config import HISTORICAL_START_TIME, HISTORICAL_END_TIME, CLARITY_REPORT_ID
+from clarity import ClarityAPI
+from config import log, CLARITY_USE_CONTINUATION_TOKEN, CLARITY_REPORT_ID
 from utils import redact, write_txt
 
-from clarity import ClarityAPI
-
-import os
-import sys
-
-OPERATION = os.getenv('OPERATION', 'hourly')
 
 # globals: S3_BUCKET_NAME, CLARITY_API_KEY, CLARITY_ORG_NAME, CONTINUATION_TOKEN_OUTPUT_PATH, s3_client
 class HistoricalMeasurements(ClarityAPI):
@@ -134,7 +122,9 @@ class HistoricalMeasurements(ClarityAPI):
         while report_processing is None or report_processing['reportStatus'] == 'in-progress' and report_processing[
             'message'] == 'Processing':
             report_processing = self.historical_get_report_request_fetch(report_id=report_id)
-            log.info(f'Poll status ({retries}/{maxRetries}): {report_processing}')
+            report_status = report_processing['reportStatus']
+            report_message = report_processing['message']
+            log.info(f'Poll status ({retries}/{maxRetries}): {report_id} | {report_status}: {report_message}')
 
             # Wait for report to include URLs
             if 'urls' not in report_processing or len(report_processing['urls']) == 0:

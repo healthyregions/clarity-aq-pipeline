@@ -3,13 +3,13 @@ import os
 import sys
 from datetime import datetime
 
-from config import log, IS_MINIO, S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY, LOCAL_OUTPUT_DIR
-from config import INDEX_OUTPUT_PATH, S3_UPLOAD_PATH, CLEANED_DATA_OUTPUT_PATH
-from config import S3_REGION, S3_STORAGE_CLASS, S3_BUCKET_NAME
+import s3fs
 
+from config import log, IS_MINIO, S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY
+from config import INDEX_OUTPUT_PATH, S3_UPLOAD_PATH
+from config import S3_REGION, S3_STORAGE_CLASS, S3_BUCKET_NAME
 from config import LATEST_DATA_OUTPUT_PATH, HISTORICAL_DATA_OUTPUT_PATH
 
-import s3fs
 
 # Build an S3 client using the given credentials + endpoint
 s3_client = s3fs.S3FileSystem(anon=False, key=S3_ACCESS_KEY, secret=S3_SECRET_KEY, client_kwargs={

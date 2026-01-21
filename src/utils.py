@@ -1,9 +1,8 @@
 import json
 from decimal import Decimal
-from typing import Optional
 
 import pandas as pd
-from pandas import DataFrame, value_counts
+from pandas import DataFrame
 from pathlib import Path
 
 
@@ -26,11 +25,6 @@ def redact(redactable: any, key_name: str = '', limit = 20):
         return truncate(full_str=redactable, limit=limit)
     else:
         raise TypeError(f'ERROR: unrecognized type - {type(redactable).__name__}')
-
-
-# Shorthand helper functon for setting or defaulting a variable value
-def set_or_default(value, default):
-    return value if value else default
 
 
 # Data cleanup process will be written in R

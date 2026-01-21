@@ -1,24 +1,17 @@
 import argparse
 import os
+import subprocess
 import sys
 
-import requests
-
 from config import log, CLARITY_HOSTNAME, CLARITY_USE_CONTINUATION_TOKEN, LOCAL_OUTPUT_DIR
-from config import HISTORICAL_START_TIME, HISTORICAL_END_TIME, MONTHLY_DATA_OUTPUT_PATH
-from config import OUTPUT_LOCATIONS_AS_JSON, LOCATIONS_OUTPUT_PATH
-from config import CONTINUATION_TOKEN_OUTPUT_PATH, QUERY_OUTPUT_PATH
-from config import RAW_DATA_OUTPUT_PATH, CLEANED_DATA_OUTPUT_PATH
-from config import S3_BUCKET_NAME, S3_UPLOAD_PATH, INDEX_OUTPUT_PATH
+from config import HISTORICAL_START_TIME, HISTORICAL_END_TIME
+from config import CONTINUATION_TOKEN_OUTPUT_PATH
+from config import S3_BUCKET_NAME, INDEX_OUTPUT_PATH
 from config import HISTORICAL_DATA_OUTPUT_PATH, LATEST_DATA_OUTPUT_PATH
-
-from utils import write_txt, write_json_dict, write_csv
-from utils import run_postprocessing, to_geojson_simple, to_geojson_historical
-
-from clarity import ClarityAPI
 from historical import HistoricalMeasurements
 from recent import RecentMeasurements
 from s3 import S3API
+from utils import write_txt
 
 
 def main(args):
@@ -29,8 +22,8 @@ def main(args):
         sys.exit(0)
 
 
-    if not args.historical and not args.recent and not args.push:
-        log.error('You must specify either -H (--historical), -r (--recent), or -p (--push)')
+    if not args.clean and not args.historical and not args.recent and not args.push:
+        log.error('You must specify either -c (--clean), -H (--historical), -r (--recent), or -p (--push)')
         sys.exit(200)
 
 
@@ -46,7 +39,8 @@ def main(args):
 
         log.info(f'Data fetched successfully: {output_path}')
 
-        sys.exit(0)
+        if not args.clean:
+            sys.exit(0)
 
 
     # Fetch historical measurements from the clarity API
@@ -64,7 +58,29 @@ def main(args):
 
         log.info(f'Historical data fetched successfully: {HISTORICAL_START_TIME} - {HISTORICAL_END_TIME} -> {output_path}')
 
-        sys.exit(0)
+        if not args.clean:
+            sys.exit(0)
+
+
+    # Clean fetched measurements with R script
+    # Write raw metrics (uncleaned) into the output folder
+    if args.clean:
+        log.info(f'Cleaning up measurement data with R...')
+
+        try:
+            output = subprocess.check_output([
+                'Rscript',
+                'clarity_qa_qc.R',
+                '--historical' if args.historical else '--recent'
+            ], universal_newlines=True, stderr=subprocess.PIPE)
+            print('Result:', output.strip())
+        except subprocess.CalledProcessError as e:
+            print('R script failed. Error:', e.stderr)
+        except FileNotFoundError:
+            print('Rscript not found.')
+
+        if not args.push:
+            sys.exit(0)
 
 
     # Push select files from the output folder to the proper destinations in S3
@@ -105,11 +121,15 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Chicago Air Quality Sensor Grid')
-    parser.add_argument('-p', '--push',  action='store_true',  help='Upload resulting output data to S3 (Minio or AWS S3)')
     parser.add_argument('-i', '--index', action='store_true',
-                        help="Only generate index.json file. don't fetch or push")
+                        help="DEBUG ONLY: generate index.json file, but don't fetch or push new data")
     parser.add_argument('-r', '--recent', action='store_true',
                         help="Compute recent measurements data between startTime and now")
     parser.add_argument('-H', '--historical', action='store_true',
                         help="Compute historical measurements between startTime and endTime (may take awhile)")
+    parser.add_argument('-c', '--clean', action='store_true',
+                        help="Clean the measurement data by running the related R script, compute daily/hourly averages")
+    parser.add_argument('-p', '--push', action='store_true',
+                        help='Generate a new index (implies -i), then upload resulting output data to S3 (MinIO or AWS S3)')
+
     main(args=parser.parse_args())
