@@ -3,12 +3,34 @@ library(lubridate)
 library(tidyr)
 library(purrr)
 library(slider)
+library(arrow)
 
 # Read configuration from environment variables
-raw_minute_input_path <- Sys.getenv("MONTHLY_RAW_INPUT_PATH", unset = "./data/monthly-raw-0.csv")
-raw_minute_output_dir <- Sys.getenv("MONTHLY_CLEANED_OUTPUT_DIR", unset = "./data/")
+raw_historical_input_path <- Sys.getenv("HISTORICAL_RAW_INPUT_PATH", unset = "./data/raw-measurements-historical-0.csv")
+raw_recent_input_path <- Sys.getenv("RECENT_RAW_INPUT_PATH", unset = "./data/raw-measurements-recent.csv")
 
-df <- readr::read_csv(raw_minute_input_path)
+raw_minute_output_dir <- Sys.getenv("CLEANED_OUTPUT_DIR", unset = "./data/")
+
+args <- commandArgs(trailingOnly = TRUE)
+if (length(args) == 0) {
+    cat("ERROR: Missing required argument.\n", sep = "")
+    cat("   Please specify either --recent or --historical\n", sep = "")
+    quit(status=-1)
+} else if (args[1] == "--recent") {
+    cat("Cleaning recent sensor measurement data...\n", sep = "")
+    raw_input_path <- raw_recent_input_path
+} else if (args[1] == "--historical") {
+    cat("Cleaning historical sensor measurement data...\n", sep = "")
+    raw_input_path <- raw_historical_input_path
+} else {
+    cat("ERROR: Unrecognized argument: ", args[1], "\n", sep = "")
+    cat("   Please specify either --recent or --historical\n", sep = "")
+    quit(status=-2)
+}
+
+
+# Script expects per-minute data in csv-wide format
+df <- readr::read_csv(raw_input_path)
 
 # Step 1
 # PM2.5 measurements
@@ -280,7 +302,7 @@ cat("Hourly rows (all):", nrow(hourly), "\n")
 # Keep hours with n_obs ≥ 3 (completeness ≥ 75%)
 df_hourly <- hourly %>%
   filter(is_valid_hour) %>%
-  select(datasourceId, sourceId, hour, mean_pm25, n_obs)
+  select(datasourceId, sourceId, hour, mean_pm25, n_obs, is_valid_hour)
 
 cat("Valid hourly rows (>=75% completeness): ", nrow(df_hourly), "\n")
 
@@ -289,8 +311,8 @@ cat("Valid hourly rows (>=75% completeness): ", nrow(df_hourly), "\n")
 # Daily aggregation data using only valid hours
 daily <- df_hourly %>%
   mutate(date = as_date(hour)) %>%
-  group_by(sourceId, date) %>%
-  summarize(
+  group_by(datasourceId, sourceId, date) %>%
+  summarise(
     n_valid_hours = n(),                     # Count of valid hours
     daily_mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid hourly means
     .groups = "drop"
@@ -301,8 +323,73 @@ cat("Daily rows (all):", nrow(daily), "\n")
 
 # Keep only valid days
 df_daily <- daily %>% filter(is_valid_day)
-
 cat("Valid daily rows (>20 valid hours):", sum(daily$is_valid_day, na.rm = TRUE), "\n")
+
+
+# TODO: get real average code from UIC
+# stuff below is pretty much just made up
+
+# If today is first of week/month/year, calculate weekly/monthly/yearly average for previous week/month/year
+today_date <- today()
+is_first_of_week <- weekdays(today_date) == "Monday"
+is_first_of_month <- mday(today_date) == 1
+is_first_of_year <- yday(today_date) == 1
+
+# TODO: Possibly for the future?
+if (is_first_of_week) {
+#     weekly <- df_daily %>%
+#       group_by(datasourceId, sourceId, date) %>%
+#       summarise(
+#         n_valid_days = n(),                     # Count of valid days
+#         weekly_mean_pm25 = mean(daily_mean_pm25, na.rm = TRUE),  # Mean of valid daily means
+#         .groups = "drop"
+#       ) %>%
+#       mutate(is_valid_week = n_valid_days > 5) # FIXME:  >5 days?
+#
+#     cat("Weekly rows (all):", nrow(weekly), "\n")
+#
+#     # Keep only valid weeks
+#     df_weekly <- weekly %>% filter(is_valid_week)
+}
+
+
+if (is_first_of_month) {
+
+}
+
+if (is_first_of_year) {
+
+}
+
+print(df_hourly)
+df_citywide_hourly <- df_hourly %>%
+    #filter(is_valid_hour) %>%
+    group_by(hour) %>%
+    summarize(
+        n_obs = n(),
+        datasourceId = "CITYWIDE",
+        sourceId = "CITYWIDE",
+        mean_pm25 = mean(mean_pm25, na.rm = TRUE),
+        is_valid_hour = n_obs >= min_obs_per_hour,
+    )
+print(df_citywide_hourly)
+df_hourly_final <- rbind(df_hourly, df_citywide_hourly)
+
+print(df_daily)
+df_citywide_daily <- df_daily %>%
+    #filter(is_valid_day) %>%
+    group_by(date) %>%
+    summarize(
+        n_valid_hours = n(),
+        datasourceId = "CITYWIDE",
+        sourceId = "CITYWIDE",
+        daily_mean_pm25 = mean(daily_mean_pm25, na.rm = TRUE),
+        is_valid_day = n_valid_hours > 20,
+    )
+print(df_citywide_daily)
+df_daily_final <- rbind(df_daily, df_citywide_daily)
+
+
 
 # Per-sensor completeness summary
 # For each sensor
@@ -310,8 +397,8 @@ cat("Valid daily rows (>20 valid hours):", sum(daily$is_valid_day, na.rm = TRUE)
 # hours_valid: number of hours that meet the completeness criterion (i.e., n_obs >= min_obs_per_hour,so is_valid_hour == TRUE)
 # pct_valid: percentage of valid hours out of total hours
 sensor_hourly_comp <- hourly %>%
-  group_by(sourceId) %>%
-  summarize(
+  group_by(datasourceId, sourceId) %>%
+  summarise(
     hours_total = n(),
     hours_valid = sum(is_valid_hour),
     pct_valid   = 100 * hours_valid / pmax(hours_total, 1),
@@ -320,10 +407,30 @@ sensor_hourly_comp <- hourly %>%
 
 print(head(sensor_hourly_comp))
 
-daily_output_file <- paste(raw_minute_output_dir, "daily-cleaned-0.json", sep = "")
-hourly_output_file <- paste(raw_minute_output_dir, "hourly-cleaned-0.json", sep = "")
-summary_output_file <- paste(raw_minute_output_dir, "summary-cleaned-0.json", sep = "")
+# Read OUTPUT_FORMAT envvar - possible values are json, csv, parquet (default)
+output_format <- tolower(Sys.getenv("OUTPUT_FORMAT", unset = ""))
 
-jsonlite::write_json(df_daily, daily_output_file, pretty = FALSE)
-jsonlite::write_json(df_hourly, hourly_output_file, pretty = FALSE)
-jsonlite::write_json(sensor_hourly_comp, summary_output_file, pretty = FALSE)
+# Build up file name based on dataframe name + output_format (default=parquet)
+summary_daily_file <- paste(raw_minute_output_dir, "summary-daily-0.", output_format, sep = "")
+summery_hourly_file <- paste(raw_minute_output_dir, "summary-hourly-0.", output_format, sep = "")
+summary_completeness_file <- paste(raw_minute_output_dir, "summary-completeness-0.", output_format, sep = "")
+
+# Write the chosen format to disk
+cat("Writing as OUTPUT_FORMAT=", output_format, " format...\n", sep = "")
+if (output_format == "parquet") {
+    write_parquet(x = df_daily_final, sink = summary_daily_file)
+    write_parquet(x = df_hourly_final, sink = summery_hourly_file)
+    write_parquet(x = sensor_hourly_comp, sink = summary_completeness_file)
+} else if (output_format == "csv") {
+    write.csv(df_daily_final, summary_daily_file, row.names = FALSE)
+    write.csv(df_hourly_final, summery_hourly_file, row.names = FALSE)
+    write.csv(sensor_hourly_comp, summary_completeness_file, row.names = FALSE)
+} else if (output_format == "json") {
+    jsonlite::write_json(df_daily_final, summary_daily_file, pretty = FALSE)
+    jsonlite::write_json(df_hourly_final, summery_hourly_file, pretty = FALSE)
+    jsonlite::write_json(sensor_hourly_comp, summary_completeness_file, pretty = FALSE)
+} else {
+    cat("Skipping writing unknown file format: \"", output_format, "\"\n", sep = "")
+}
+
+cat("Data cleanup finished successfully!\n")

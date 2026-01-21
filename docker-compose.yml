@@ -45,20 +45,7 @@ services:
     build:
       context: .
     profiles: ["pipeline"]
-    command: ['--fetch']
-    network_mode: host
-    volumes:
-      - ./data:/usr/app/data/
-
-
-  claritymonthly:
-    image: ghcr.io/healthyregions/clarity-aq-pipeline
-    env_file:
-      - .env
-    build:
-      context: .
-    profiles: ["pipeline"]
-    command: ['--monthly']
+    #command: ['--recent']
     network_mode: host
     volumes:
       - ./data:/usr/app/data/
@@ -73,6 +60,7 @@ services:
     volumes:
       - ./data:/home/rstudio/data/
     profiles: ["pipeline"]
+    #command: ['--recent']
 
 
   s3push:

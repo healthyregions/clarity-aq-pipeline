@@ -1,9 +1,31 @@
 import json
 from decimal import Decimal
+from typing import Optional
 
 import pandas as pd
 from pandas import DataFrame, value_counts
 from pathlib import Path
+
+
+def truncate(full_str: str, limit = 20):
+    return f'{full_str[:limit]}...' if len(full_str) > limit else full_str
+
+def redact(redactable: any, key_name: str = '', limit = 20):
+    if isinstance(redactable, dict):
+        # Create a deep copy of input object
+        if key_name == '':
+            raise ValueError(
+                'ERROR: redacting dictionary requires a key_name to redact. Provide a key_name to redact the value.')
+        elif key_name in redactable:
+            # key was found - redact the value
+            return {**redactable, f'{key_name}': truncate(full_str=redactable[key_name], limit=limit)}
+        else:
+            return redactable  # key was not found - return noop
+    if isinstance(redactable, str):
+        # key_name ignored, since value is a string
+        return truncate(full_str=redactable, limit=limit)
+    else:
+        raise TypeError(f'ERROR: unrecognized type - {type(redactable).__name__}')
 
 
 # Shorthand helper functon for setting or defaulting a variable value

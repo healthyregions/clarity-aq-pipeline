@@ -78,14 +78,14 @@ first_of_prev_month = last_of_prev_month.replace(day=1, hour=0, minute=0, second
 
 # A date in ISO 8601 format, e.g. "2023-01-02T03:45:67.899Z".
 # Measurements returned are on or after this time.
-MONTHLY_START_TIME = set_or_default(
-    value=os.getenv('MONTHLY_START_TIME', None),
+HISTORICAL_START_TIME = set_or_default(
+    value=os.getenv('HISTORICAL_START_TIME', None),
     default=first_of_prev_month.strftime('%Y-%m-%dT%H:%M:%S.000Z')
 )
 # A date in ISO 8601 format, e.g. "2023-01-02T03:45:67.899Z".
 # Measurements returned are before this time.
-MONTHLY_END_TIME = set_or_default(
-    value=os.getenv('MONTHLY_END_TIME', None),
+HISTORICAL_END_TIME = set_or_default(
+    value=os.getenv('HISTORICAL_END_TIME', None),
     default=first_of_this_month.strftime('%Y-%m-%dT%H:%M:%S.000Z')
 )
 
