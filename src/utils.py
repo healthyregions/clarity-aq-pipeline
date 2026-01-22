@@ -6,6 +6,7 @@ from pandas import DataFrame
 from pathlib import Path
 
 # TODO: Currently unused, but one idea for the near future
+# Helper enum to compute adjacent date ranges
 from enum import Enum
 class OperationPeriod(Enum):
     YEARLY = 1

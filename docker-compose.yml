@@ -21,7 +21,7 @@ services:
 
 
   createbuckets:
-    image: minio/mc
+    image: minio/mc:latest
     env_file:
       - .env
     network_mode: host
@@ -45,7 +45,6 @@ services:
       - .env
     build:
       context: .
-    #command: ['--recent']
     network_mode: host
     volumes:
       - ./data:/home/rstudio/data/

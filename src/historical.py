@@ -97,12 +97,13 @@ class HistoricalMeasurements(ClarityAPI):
     def historical_post_report_request(self, body: dict):
         # format: {"reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing", "report": "datasource-measurements", "urls": [], "query": {"datasourceIds": ["DZFUM1742", "DRJLK4822", ,,, ], "endTime": "2025-11-01T00:00:00.000Z", "outputFrequency": "minute", "startTime": "2025-10-01T00:00:00.000Z", "format": "csv-wide", "metricLabelStyle": "canonical", "qcAssessment": true, "qcFlags": true}}
         redacted = redact(redactable=body, key_name='continuationToken')
-        redacted['query'] = redact(redactable=body['query'], key_name='datasourceIds')
         log.info(f'Submitting query: {redacted}')
         r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
         r.raise_for_status()
         report_processing = r.json()
-        log.debug(f'Fetched metadata: {report_processing}')
+        redacted_report_processing = json.loads(json.dumps(report_processing))
+        redacted_report_processing['query'] = redact(redactable=report_processing['query'], key_name='datasourceIds', limit=30)
+        log.debug(f'Fetched metadata: {redacted_report_processing}')
 
         # Poll for the report that we submitted
         return report_processing
@@ -130,7 +131,7 @@ class HistoricalMeasurements(ClarityAPI):
             report_processing = self.historical_get_report_request_fetch(report_id=report_id)
             report_status = report_processing['reportStatus']
             report_message = report_processing['message']
-            log.info(f'Poll status ({retries}/{maxRetries}): {report_id} | {report_status}: {report_message}')
+            log.info(f'Poll status ({retries}/{maxRetries} retries): {report_id} | {report_status}: {report_message}')
 
             # Wait for report to include URLs
             if 'urls' not in report_processing or len(report_processing['urls']) == 0:
