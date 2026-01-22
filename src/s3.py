@@ -1,7 +1,5 @@
 import json
-import os
-import sys
-from datetime import datetime, UTC, timedelta
+from datetime import datetime
 from time import sleep
 
 import pandas as pd
@@ -95,15 +93,11 @@ class S3API(object):
 
 
     # Given a metric name and a dataframe of new sensor data for that metric,
-    #   - Acquire the lock to write to the data
-    #   - Fetch our existing parquet dataset, create a new one if it doesn't exist
-    #   - Merge existing data into the parquet dataset
-    #   - Save merged dataset to S3
+    #   - Acquire the lock to claim exclusive write access to the data
+    #   - Merge with our existing parquet dataset, create a new one if it doesn't exist
+    #   - Overwrite this file in S3
     #   - Release the lock to end data writing
     def update_measurements_df(self, new_measurements_df, metric_name):
-        # Get current dataset, or create a new one if it doesn't exist
-        measurements_df_path = f'{S3_BUCKET_NAME}/current/{metric_name}.parquet'
-
         # Recompute full_network average, update dataset in S3
         new_measurements_df['full_network'] = new_measurements_df.mean(axis=1, numeric_only=True)
 
@@ -112,26 +106,25 @@ class S3API(object):
         #sensor_ids = existing_locations_df['datasourceId'].unique().tolist()
         #new_measurements_df = new_measurements_df[['type', 'date', 'full_network']].rename(columns={'datasourceId',''})
 
+        # Merge with current dataset, or create a new one if it doesn't exist
         return self.merge_parquet_dataset(
-            df_path=measurements_df_path,
+            df_path=f'{S3_BUCKET_NAME}/current/{metric_name}.parquet',
             data_to_merge=new_measurements_df,
             columns=['type', 'date']
         )
 
 
     # Merged lat/lon coordinates into our list of known sensorIds
-    #   - Acquire the lock to write to the data
-    #   - Fetch our existing parquet dataset, create a new one if it doesn't exist
-    #   - Merge existing data into the parquet dataset
-    #   - Save merged dataset to S3
+    #   - Acquire the lock to claim exclusive write access to the data
+    #   - Merge with our existing parquet dataset, create a new one if it doesn't exist
+    #   - Overwrite this file in S3
     #   - Release the lock to end data writing
     def update_locations_df(self, new_locations_df):
-        # Get current dataset, or create a new one if it doesn't exist
-        locations_df_path = f'{S3_BUCKET_NAME}/current/locations.parquet'
+        # Merge with current dataset, or create a new one if it doesn't exist
         return self.merge_parquet_dataset(
-            df_path=locations_df_path,
+            df_path=f'{S3_BUCKET_NAME}/current/locations.parquet',
             data_to_merge=new_locations_df,
-            columns=['datasourceId','sourceId']
+            columns=['datasourceId','sourceId'],
         )
 
 
@@ -177,10 +170,17 @@ class S3API(object):
 
             # Drop any rows where subset columns are NaN or empty
             merged_df = merged_df.dropna(subset=columns, how='all')
-            print(merged_df)
 
-            # Write to S3
-            self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
+            # Sort one last time
+            merged_df.set_index(columns, inplace=True)
+            merged_df.sort_index(inplace=True)
+            merged_df.reset_index(inplace=True)
+
+            log.debug(merged_df)
+
+            # Write to S3 if dataset has changed
+            if not merged_df.equals(data_to_merge):
+                self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
             return merged_df
         except Exception as e:
             log.error(f'Failed to update Parquet dataset in S3: {e}')

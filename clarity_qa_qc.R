@@ -9,7 +9,11 @@ library(arrow)
 raw_historical_input_path <- Sys.getenv("HISTORICAL_RAW_INPUT_PATH", unset = "./data/raw-measurements-historical.csv")
 raw_recent_input_path <- Sys.getenv("RECENT_RAW_INPUT_PATH", unset = "./data/raw-measurements-recent.csv")
 
+log_level <- Sys.getenv("LOGLEVEL", unset = "info")
 raw_minute_output_dir <- Sys.getenv("CLEANED_OUTPUT_DIR", unset = "./data/")
+
+# Read OUTPUT_FORMAT envvar - possible values are json, csv, parquet (default)
+output_format <- tolower(Sys.getenv("OUTPUT_FORMAT", unset = "csv"))
 
 args <- commandArgs(trailingOnly = TRUE)
 if (length(args) == 0) {
@@ -361,7 +365,9 @@ if (is_first_of_year) {
 
 }
 
-print(df_hourly)
+if (log_level == 'debug') {
+    print(df_hourly)
+}
 # df_citywide_hourly <- df_hourly %>%
 #     #filter(is_valid_hour) %>%
 #     group_by(hour) %>%
@@ -375,7 +381,9 @@ print(df_hourly)
 # print(df_citywide_hourly)
 #df_hourly_final < - rbind(df_hourly, df_citywide_hourly)
 
-print(df_daily)
+if (log_level == 'debug') {
+    print(df_daily)
+}
 # df_citywide_daily <- df_daily %>%
 #     #filter(is_valid_day) %>%
 #     group_by(date) %>%
@@ -406,9 +414,6 @@ sensor_hourly_comp <- hourly %>%
   )
 
 print(head(sensor_hourly_comp))
-
-# Read OUTPUT_FORMAT envvar - possible values are json, csv, parquet (default)
-output_format <- tolower(Sys.getenv("OUTPUT_FORMAT", unset = "csv"))
 
 # Build up file name based on dataframe name + output_format (default=parquet)
 summary_daily_file <- paste(raw_minute_output_dir, "summary-daily.", output_format, sep = "")

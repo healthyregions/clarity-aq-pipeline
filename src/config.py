@@ -10,13 +10,15 @@ def set_or_default(value, default):
     return value if value else default
 
 # Configure logging based on user input
+default_log_level = 'INFO'
 LOGLEVEL = set_or_default(
-    value=os.getenv('LOGLEVEL', 'DEBUG').upper(),
-    default='INFO'
+    value=os.getenv('LOGLEVEL', default_log_level).upper(),
+    default=default_log_level
 )
 level = logging.getLevelName(LOGLEVEL)
 logging.basicConfig(level=level)
 log = logging.getLogger(__name__)
+log.setLevel(LOGLEVEL)
 
 # Connection details for Clarity API
 CLARITY_ORG_NAME = os.getenv('CLARITY_ORG_NAME', 'cityof58A9')

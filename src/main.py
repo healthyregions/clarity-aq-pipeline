@@ -7,13 +7,14 @@ import sys
 import pandas as pd
 import pyarrow as pa
 
-from config import log, CLARITY_HOSTNAME, LOCAL_OUTPUT_DIR
+from config import log, CLARITY_HOSTNAME, LOCAL_OUTPUT_DIR, LOGLEVEL
 from config import HISTORICAL_START_TIME, HISTORICAL_END_TIME
 from historical import HistoricalMeasurements
 from recent import RecentMeasurements
 from s3 import S3API
 
 
+logging.getLogger('config').setLevel(level=logging.getLevelName(LOGLEVEL))
 logging.getLogger('asyncio').setLevel(level=logging.INFO)
 logging.getLogger('fsspec').setLevel(level=logging.DEBUG)
 logging.getLogger('s3fs').setLevel(level=logging.INFO)
