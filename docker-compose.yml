@@ -45,27 +45,10 @@ services:
       - .env
     build:
       context: .
-    profiles: ["pipeline"]
     #command: ['--recent']
     network_mode: host
     volumes:
       - ./data:/home/rstudio/data/
 
 
-  s3push:
-    image: ghcr.io/healthyregions/clarity-aq-pipeline
-    env_file:
-      - .env
-    build:
-      context: .
-    command: ['--push']
-    network_mode: host
-    volumes:
-      - ./data:/home/rstudio/data/
-    profiles: ["pipeline"]
-    #depends_on:
-    #  clarityfetch:
-    #    condition: service_completed_successfully
-    #  datacleanup:
-    #    condition: service_completed_successfully
 

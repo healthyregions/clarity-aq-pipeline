@@ -3,13 +3,15 @@ import sys
 
 from config import log, CLARITY_HOSTNAME, CLARITY_ORG_NAME, CLARITY_API_KEY, CLARITY_USE_CONTINUATION_TOKEN
 from config import CONTINUATION_TOKEN_OUTPUT_PATH, S3_BUCKET_NAME
-from s3 import s3_client
+from s3 import S3API
 from utils import from_json
 
 
 # globals: S3_BUCKET_NAME, CLARITY_API_KEY, CLARITY_ORG_NAME, CONTINUATION_TOKEN_OUTPUT_PATH, s3_client
 class ClarityAPI(object):
-    def __init__(self):
+    def __init__(self, s3api: S3API):
+        self.s3api = s3api
+
         # Endpoint URLs / default headers for Clarity's API
         self.orgName = CLARITY_ORG_NAME
         self.measurementsUrl = f'{CLARITY_HOSTNAME}/recent-datasource-measurements-query'
@@ -36,8 +38,8 @@ class ClarityAPI(object):
     def read_continuation_token(self):
         token_local_path = f'{S3_BUCKET_NAME}/token.txt'
         if CLARITY_USE_CONTINUATION_TOKEN:
-            if s3_client.exists(token_local_path):
-                with s3_client.open(token_local_path, 'r') as f:
+            if self.s3api.client.exists(token_local_path):
+                with self.s3api.client.open(token_local_path, 'r') as f:
                      return f.read()
         return None
 

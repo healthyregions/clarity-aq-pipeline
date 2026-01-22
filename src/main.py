@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import subprocess
 import sys
@@ -19,7 +20,14 @@ from s3 import S3API
 from utils import write_txt
 
 
+logging.getLogger('s3fs').setLevel(level=logging.INFO)
+logging.getLogger('aiobotocore.regions').setLevel(level=logging.INFO)
+logging.getLogger('botocore').setLevel(level=logging.INFO)
+logging.getLogger('botocore.hooks').setLevel(level=logging.INFO)
+
 def main(args):
+    s3api = S3API()
+
     if args.index:
         s3api = S3API()
         latest_timestamp = s3api.generate_index_file()
@@ -27,17 +35,22 @@ def main(args):
         sys.exit(0)
 
 
-    # Sanity check - make sure our given arguments make sense
+    # Sanity check - make sure that fetch was provided either --recent or --historical
     if args.fetch and not args.historical and not args.recent:
         log.error('Fetch (-f) requires either --historical (-H) or --recent (-r)')
         sys.exit(200)
+
+    # Sanity check - make sure user hasn't specified both --recent and --historical
+    if  args.historical and args.recent:
+        log.error('--recent (-r) and --historical (-H) are mutually exclusive - please choose only one of these flags')
+        sys.exit(300)
 
 
     # Fetch recent measurements from the clarity API
     # Write raw metrics (uncleaned) into the output folder
     if args.fetch and args.recent:
         log.info(f'Fetching recent measurement data from: {CLARITY_HOSTNAME}')
-        clarity = RecentMeasurements()
+        clarity = RecentMeasurements(s3api=s3api)
         csv_contents = clarity.recent_fetch_metrics()
 
         output_path = os.path.join(LOCAL_OUTPUT_DIR, 'raw-measurements-recent.csv')
@@ -55,7 +68,7 @@ def main(args):
         log.info(f'Fetching historical measurement data from: {CLARITY_HOSTNAME}')
         log.info(f'    Start time: {HISTORICAL_START_TIME}')
         log.info(f'    End time  : {HISTORICAL_END_TIME}')
-        clarity = HistoricalMeasurements()
+        clarity = HistoricalMeasurements(s3api=s3api)
         report_processed = clarity.historical_fetch_metrics(start_time=HISTORICAL_START_TIME, end_time=HISTORICAL_END_TIME)
 
         # Output metrics and run post-processing
@@ -102,7 +115,7 @@ def main(args):
             'is_valid_hour': 'is_valid',
             'hour': 'date'
         })
-        print(hourly)
+        #print(hourly)
 
         # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
         daily = pd.read_csv('data/summary-daily-0.csv')
@@ -112,17 +125,29 @@ def main(args):
             'is_valid_day': 'is_valid',
             'daily_mean_pm25': 'mean_pm25',
         })
-        print(daily)
+        #print(daily)
+
 
         # Merge daily + hourly into a single pivoted dataframe
-        new_sensor_df = pd.concat([daily, hourly]).pivot(index=['type','date'], columns=['datasourceId'], values='mean_pm25')
-        #new_sensor_df.to_csv('data/example-pivoted.csv')
-
+        merged_sensor_df = pd.concat([daily, hourly])
+        unique_sensor_df = merged_sensor_df.drop_duplicates(subset=['type','date'])
+        sensor_ids = [id for id in unique_sensor_df['datasourceId']]
+        new_sensor_df = merged_sensor_df.pivot(index=['type','date'], columns=['datasourceId'], values='mean_pm25')
         new_sensor_df['full_network'] = new_sensor_df.mean(axis=1)
+        print('Before reset_index')
+        print(new_sensor_df)
+        new_sensor_df = new_sensor_df.rename(columns={
+            'datasourceId': '',
+        }).reset_index()
+        print('After reset_index')
         print(new_sensor_df)
 
-
         # TODO: Fetch existing parquet file, if one exists in S3, read into dataframe
+        merged_yearly_data_df = s3api.update_current_dataset(
+            metric_name='mean_pm25',
+            sensor_ids=sensor_ids,
+            new_metric_df=new_sensor_df,
+        )
 
         # Merge latest data into existing dataframe, write as parquet file
         log.info(f'Merging with existing parquet file from CSV: noop')
@@ -141,7 +166,6 @@ def main(args):
 
     # Push select files from the output folder to the proper destinations in S3
     if args.push:
-        s3api = S3API()
         latest_timestamp = s3api.generate_index_file()
 
         # Mapping of local file source path -> destination path within S3

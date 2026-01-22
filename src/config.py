@@ -1,6 +1,6 @@
 # All environment variables that control behavior of the clarity-aq-pipeline are defined here
 
-import datetime
+from datetime import datetime, UTC, timedelta
 import logging
 import os
 
@@ -52,7 +52,7 @@ S3_UPLOAD_PATH = set_or_default(
     # Python's datetime does not support military timezone suffixes like 'Z' suffix for UTC
     # see https://stackoverflow.com/a/42777551
     # The following simple string replacement does the trick:
-    default=datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
+    default=datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%SZ')
     #
     # Javascript can parse ISO format as a date string and localize to a timezone:
     #
@@ -67,10 +67,10 @@ S3_UPLOAD_PATH = set_or_default(
 )
 
 # Compute today's timestamp, use that to find first microsecond of the current month
-now = datetime.datetime.now(datetime.UTC)
+now = datetime.now(UTC)
 first_of_this_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 # subtract 1 microsecond to get the end_date from the previous month
-last_of_prev_month = first_of_this_month - datetime.timedelta(microseconds=1)
+last_of_prev_month = first_of_this_month - timedelta(microseconds=1)
 # repeat this process to get first microsecond of previous month to get the start_date
 first_of_prev_month = last_of_prev_month.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
