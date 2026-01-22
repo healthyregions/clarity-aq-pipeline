@@ -1,8 +1,10 @@
+from io import StringIO
+
+import pandas as pd
 from requests import RequestException, Response
 import sys
 
 from config import log, CLARITY_HOSTNAME, CLARITY_ORG_NAME, CLARITY_API_KEY, CLARITY_USE_CONTINUATION_TOKEN
-from config import CONTINUATION_TOKEN_OUTPUT_PATH, S3_BUCKET_NAME
 from s3 import S3API
 from utils import from_json
 
@@ -25,6 +27,7 @@ class ClarityAPI(object):
           'x-api-key': CLARITY_API_KEY
         }
 
+
     def log_exception(self, ex: RequestException, message: str):
         log.error(f'{message}. Details: {ex}')
         try:
@@ -34,28 +37,23 @@ class ClarityAPI(object):
             log.fatal('Encountered a failure while logging response error. Shutting down....')
             sys.exit(99)
 
-    # Fetch existing continuation token from S3 bucket
-    def read_continuation_token(self):
-        token_local_path = f'{S3_BUCKET_NAME}/token.txt'
-        if CLARITY_USE_CONTINUATION_TOKEN:
-            if self.s3api.client.exists(token_local_path):
-                with self.s3api.client.open(token_local_path, 'r') as f:
-                     return f.read()
-        return None
 
-    # Write continuation token to local output directory
-    # This will be written to S3 with the rest of the uploaded output files
-    def write_continuation_token(self, token):
-        # store latest continuation token locally
-        if CLARITY_USE_CONTINUATION_TOKEN:
-            with open(CONTINUATION_TOKEN_OUTPUT_PATH, 'w') as f:
-                f.write(token)
+    def gather_locations(self, measurements_df):
+        location_df_columns = ['datasourceId', 'sourceId', 'locationLatitude', 'locationLongitude']
+        return measurements_df[location_df_columns] \
+                .drop_duplicates(subset=['datasourceId', 'sourceId']) \
+                .round(decimals=4)
 
-    # Parse csv-wide Response and return CSV contents as a text blob
+
+
+    # Parse csv-wide Response and return CSV contents as a pandas Dataframe
     def parse_results_csv_wide(self, r: Response):
         r.raise_for_status()
-        return r.text
+        data_buffer = StringIO(r.text)
+        return pd.read_csv(data_buffer)
 
+
+    # DEPRECATED: Not currently used, but helpful as a reference
     # Parse json-long Response and return a 4-tuple
     #    data => sensor data for each requested datasource
     #    locations => a separate list of the lat/long coordinates for each related datasource

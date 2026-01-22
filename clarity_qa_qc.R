@@ -6,7 +6,7 @@ library(slider)
 library(arrow)
 
 # Read configuration from environment variables
-raw_historical_input_path <- Sys.getenv("HISTORICAL_RAW_INPUT_PATH", unset = "./data/raw-measurements-historical-0.csv")
+raw_historical_input_path <- Sys.getenv("HISTORICAL_RAW_INPUT_PATH", unset = "./data/raw-measurements-historical.csv")
 raw_recent_input_path <- Sys.getenv("RECENT_RAW_INPUT_PATH", unset = "./data/raw-measurements-recent.csv")
 
 raw_minute_output_dir <- Sys.getenv("CLEANED_OUTPUT_DIR", unset = "./data/")
@@ -411,9 +411,9 @@ print(head(sensor_hourly_comp))
 output_format <- tolower(Sys.getenv("OUTPUT_FORMAT", unset = "csv"))
 
 # Build up file name based on dataframe name + output_format (default=parquet)
-summary_daily_file <- paste(raw_minute_output_dir, "summary-daily-0.", output_format, sep = "")
-summery_hourly_file <- paste(raw_minute_output_dir, "summary-hourly-0.", output_format, sep = "")
-summary_completeness_file <- paste(raw_minute_output_dir, "summary-completeness-0.", output_format, sep = "")
+summary_daily_file <- paste(raw_minute_output_dir, "summary-daily.", output_format, sep = "")
+summery_hourly_file <- paste(raw_minute_output_dir, "summary-hourly.", output_format, sep = "")
+summary_completeness_file <- paste(raw_minute_output_dir, "summary-completeness.", output_format, sep = "")
 
 df_daily_final <- df_daily    # %>% mutate(type = "day")
 df_hourly_final <- df_hourly  # %>% mutate(type = "hour")

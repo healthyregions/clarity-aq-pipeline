@@ -3,32 +3,31 @@ import requests
 import sys
 from time import sleep
 
+import pandas as pd
+
 from clarity import ClarityAPI
-from config import log, CLARITY_USE_CONTINUATION_TOKEN, CLARITY_REPORT_ID
-from utils import redact, write_txt
+from config import log, CLARITY_REPORT_ID
+from utils import redact
 
 
 # globals: S3_BUCKET_NAME, CLARITY_API_KEY, CLARITY_ORG_NAME, CONTINUATION_TOKEN_OUTPUT_PATH, s3_client
+# NOTE: Historical measurements do not support continuation tokens
 class HistoricalMeasurements(ClarityAPI):
 
     # Fetch per-minute metrics from the previous month in JSON format
     def historical_fetch_metrics(self, start_time, end_time):
-        token = self.read_continuation_token()
-        body: dict = { 'org': self.orgName }
-
-        if token:
-            body['continuationToken'] = token
-        else:
-            body['allDatasources'] = True
-            body['replyWithContinuationToken'] = CLARITY_USE_CONTINUATION_TOKEN
-            body['outputFrequency'] = 'minute'
-            body['locationRounding'] = 4
-            body['report'] = 'datasource-measurements'
-            body['format'] = 'csv-wide'
-            body['startTime'] = start_time
-            body['endTime'] = end_time
-            body['qcAssessment'] = True
-            body['qcFlags'] = True
+        body: dict = {
+            'org': self.orgName,
+            'allDatasources': True,
+            'outputFrequency': 'minute',
+            'locationRounding': 4,
+            'report': 'datasource-measurements',
+            'format': 'csv-wide',
+            'startTime': start_time,
+            'endTime': end_time,
+            'qcAssessment': True,
+            'qcFlags': True,
+        }
 
         # WARNING: the `POST /report-requests` endpoint has a limit of 30 new reports per day
         # After that, HTTP 429 will be returned indicating that the user needs to wait
@@ -64,23 +63,29 @@ class HistoricalMeasurements(ClarityAPI):
             sys.exit(6)
 
 
-    # Given a processed report and an output_path, download all report output to the path
+    # Given a processed report and an output_path, return a DataFrame containing the requested report data
     def download_report_contents(self, report_processed: dict, output_path: str):
         #report_metadata = {}
-        urls = report_processed['urls']
-        for url in urls:
-            idx = urls.index(url)
-            r = requests.get(url=url)
-            r.raise_for_status()
-            report_contents = r.text
-            #report_metadata[url] = { "contents": r.text, "index": idx, "url": url }
-            write_txt(output_path.format(index=idx), report_contents)
-
-            # TODO: write as parquet file
-
-        if not urls:
-            log.fatal('Monthly data fetch was not successful')
+        if 'urls' not in report_processed or not report_processed['urls']:
+            log.fatal(f'Monthly data fetch was not successful : No urls in processed result - {report_processed}')
             sys.exit(101)
+
+        # Loop over all URLs, download to DataFrame, and concatenate them
+        urls = report_processed['urls']
+        historical_report_df = pd.DataFrame()
+        for url in urls:
+            r = requests.get(url=url)
+            historical_report_partial_df = self.parse_results_csv_wide(r=r)
+            #report_metadata[url] = { "contents": r.text, "index": idx, "url": url }
+            historical_report_df = pd.concat([historical_report_df, historical_report_partial_df], ignore_index=True)
+
+        # Gather datasourceId, sourceId -> latlong coords, merge with existing dataframe
+        log.debug('Gathering locations...')
+        locations_df = self.gather_locations(measurements_df=historical_report_df)
+        log.debug(locations_df)
+        self.s3api.update_locations_df(new_locations_df=locations_df)
+
+        return historical_report_df, locations_df
 
 
     # Test Data
@@ -92,6 +97,7 @@ class HistoricalMeasurements(ClarityAPI):
     def historical_post_report_request(self, body: dict):
         # format: {"reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing", "report": "datasource-measurements", "urls": [], "query": {"datasourceIds": ["DZFUM1742", "DRJLK4822", ,,, ], "endTime": "2025-11-01T00:00:00.000Z", "outputFrequency": "minute", "startTime": "2025-10-01T00:00:00.000Z", "format": "csv-wide", "metricLabelStyle": "canonical", "qcAssessment": true, "qcFlags": true}}
         redacted = redact(redactable=body, key_name='continuationToken')
+        redacted['query'] = redact(redactable=body['query'], key_name='datasourceIds')
         log.info(f'Submitting query: {redacted}')
         r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
         r.raise_for_status()

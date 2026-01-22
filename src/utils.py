@@ -5,6 +5,19 @@ import pandas as pd
 from pandas import DataFrame
 from pathlib import Path
 
+# TODO: Currently unused, but one idea for the near future
+from enum import Enum
+class OperationPeriod(Enum):
+    YEARLY = 1
+    MONTHLY = 2
+    WEEKLY = 3
+    DAILY = 4
+    HOURLY = 5
+
+    SEASONAL = 6
+    # Add new periods here
+    # THIRTY_MIN = 6
+    # FIFTEEN_MIN = 7
 
 def truncate(full_str: str, limit = 20):
     return f'{full_str[:limit]}...' if len(full_str) > limit else full_str

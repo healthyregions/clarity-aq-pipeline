@@ -10,11 +10,11 @@ from utils import redact
 # globals: S3_BUCKET_NAME, CLARITY_API_KEY, CLARITY_ORG_NAME, CONTINUATION_TOKEN_OUTPUT_PATH, s3_client
 class RecentMeasurements(ClarityAPI):
 
-    def recent_post_measurements_query(self):
+    def recent_post_measurements_query(self, start_time):
         body: dict = { 'org': self.orgName }
 
         token = self.read_continuation_token()
-        if token:
+        if CLARITY_USE_CONTINUATION_TOKEN and token:
             body['continuationToken'] = token
         else:
             body['allDatasources'] = True
@@ -22,6 +22,8 @@ class RecentMeasurements(ClarityAPI):
             body['outputFrequency'] = 'minute'
             body['locationRounding'] = 4
             body['format'] = 'csv-wide'
+            if start_time:
+                body['startTime'] = start_time
 
         url = self.continuationUrl if token else self.measurementsUrl
         redacted = redact(redactable=body, key_name='continuationToken')
@@ -30,13 +32,37 @@ class RecentMeasurements(ClarityAPI):
         return requests.post(url=url, headers=self.headers, data=json.dumps(body))
 
 
+    # Fetch existing continuation token from S3 bucket
+    def read_continuation_token(self):
+        if CLARITY_USE_CONTINUATION_TOKEN:
+            return self.s3api.fetch_continuation_token()
+        return None
+
+
+    # Write continuation token to local output directory
+    # This will be written to S3 with the rest of the uploaded output files
+    def write_continuation_token(self, token):
+        # store latest continuation token locally
+        if CLARITY_USE_CONTINUATION_TOKEN and token:
+            return self.s3api.update_continuation_token(token=token)
+        elif CLARITY_USE_CONTINUATION_TOKEN:
+            log.warn('WARNING: no continuation_token to write, but CLARITY_USE_CONTINUATION_TOKEN. Query will not continue the next time unless the token is saved.')
+
 
     # Example: curl https://clarity-data-api.clarity.io/v2/recent-datasource-measurements-query -H 'Content-Type: application/json' -H 'x-api-key: ${CLARITY_API_KEY}' -H 'Accept: application/json' -d '{'org':'cityof58A9','allDatasources':true,'replyWithContinuationToken':true,'outputFrequency':'hour','format':'csv-wide'}' -vvvv
     # Fetch per-hour metrics from the past 24 hours in JSON format
-    def recent_fetch_metrics(self):
+    def recent_fetch_metrics(self, start_time):
         try:
-            r = self.recent_post_measurements_query()
-            return self.parse_results_csv_wide(r=r)
+            r = self.recent_post_measurements_query(start_time=start_time)
+            recent_measurements_df = self.parse_results_csv_wide(r=r)
+            log.debug('Gathering locations...')
+            locations_df = self.gather_locations(measurements_df=recent_measurements_df)
+
+            log.debug(locations_df)
+            self.s3api.update_locations_df(new_locations_df=locations_df)
+
+            token = r.headers.get('x-clarity-continuation-token', None)
+            return recent_measurements_df, locations_df, token
 
         except requests.exceptions.ConnectionError as ex:
             self.log_exception(ex, 'Connection Error: Could not connect to the server')
@@ -51,68 +77,3 @@ class RecentMeasurements(ClarityAPI):
             self.log_exception(ex, 'An unexpected Requests error occurred')
             sys.exit(6)
 
-
-
-
-
-
-
-    # # Example: curl https://clarity-data-api.clarity.io/v2/recent-datasource-measurements-query -H 'Content-Type: application/json' -H 'x-api-key: ${CLARITY_API_KEY}' -H 'Accept: application/json' -d '{'org':'cityof58A9','allDatasources':true,'replyWithContinuationToken':true,'outputFrequency':'hour','format':'csv-wide'}' -vvvv
-    # # Fetch per-hour metrics from the past 24 hours in JSON format
-    # def fetch_sensor_data_recent(self):
-    #     token = self.read_continuation_token()
-    #     url = self.continuationUrl if token else self.measurementsUrl
-    #     body: dict = { 'org': self.orgName }
-    #
-    #     if token:
-    #         body['continuationToken'] = token
-    #     else:
-    #         body['allDatasources'] = True
-    #         body['replyWithContinuationToken'] = CLARITY_USE_CONTINUATION_TOKEN
-    #         body['outputFrequency'] = 'hour'
-    #         body['locationRounding'] = 4
-    #         body['metricSelect'] = 'only *nowcast*'
-    #         body['format'] = 'json-long'
-    #
-    #     redacted = json.loads(json.dumps(body))
-    #     if 'continuationToken' in redacted:
-    #         redacted['continuationToken'] = f'{body["continuationToken"][:20]}...'
-    #
-    #     try:
-    #         log.info(f'Submitting query: {redacted}')
-    #         r = requests.post(url=url, headers=self.headers, data=json.dumps(body))
-    #         log.debug(r)
-    #         log.debug(r.text)
-    #         response = r.json()
-    #         r.raise_for_status()
-    #
-    #         query = response['request']
-    #         log.debug(f'Submitted query: {query}')
-    #         data = from_json(response['data'])
-    #         log.debug(f'Fetched data: {data}')
-    #         if 'locations' not in response:
-    #             log.warning(f'Warning: no metric updates detected since last run - skipping pushing empty data file')
-    #             sys.exit(25)
-    #
-    #         locations = response['locations']
-    #         log.debug(f'Fetched locations: {locations}')
-    #         if CLARITY_USE_CONTINUATION_TOKEN:
-    #             token = r.headers['x-clarity-continuation-token']
-    #             log.debug(f'New continuation token: {token}')
-    #         else:
-    #             token = None
-    #
-    #         return data, locations, token, query
-    #
-    #     except requests.exceptions.ConnectionError as ex:
-    #         self.log_exception(ex, 'Connection Error: Could not connect to the server')
-    #         sys.exit(3)
-    #     except requests.exceptions.Timeout as ex:
-    #         self.log_exception(ex, 'Timeout Error: The request timed out')
-    #         sys.exit(4)
-    #     except requests.exceptions.HTTPError as ex:
-    #         self.log_exception(ex, 'HTTP Error: A bad HTTP status code was received')
-    #         sys.exit(5)
-    #     except requests.exceptions.RequestException as ex:
-    #         self.log_exception(ex, 'An unexpected Requests error occurred')
-    #         sys.exit(6)
