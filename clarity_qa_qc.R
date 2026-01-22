@@ -362,32 +362,32 @@ if (is_first_of_year) {
 }
 
 print(df_hourly)
-df_citywide_hourly <- df_hourly %>%
-    #filter(is_valid_hour) %>%
-    group_by(hour) %>%
-    summarize(
-        n_obs = n(),
-        datasourceId = "CITYWIDE",
-        sourceId = "CITYWIDE",
-        mean_pm25 = mean(mean_pm25, na.rm = TRUE),
-        is_valid_hour = n_obs >= min_obs_per_hour,
-    )
-print(df_citywide_hourly)
-df_hourly_final <- rbind(df_hourly, df_citywide_hourly)
+# df_citywide_hourly <- df_hourly %>%
+#     #filter(is_valid_hour) %>%
+#     group_by(hour) %>%
+#     summarize(
+#         n_obs = n(),
+#         datasourceId = "CITYWIDE",
+#         sourceId = "CITYWIDE",
+#         mean_pm25 = mean(mean_pm25, na.rm = TRUE),
+#         is_valid_hour = n_obs >= min_obs_per_hour,
+#     )
+# print(df_citywide_hourly)
+#df_hourly_final < - rbind(df_hourly, df_citywide_hourly)
 
 print(df_daily)
-df_citywide_daily <- df_daily %>%
-    #filter(is_valid_day) %>%
-    group_by(date) %>%
-    summarize(
-        n_valid_hours = n(),
-        datasourceId = "CITYWIDE",
-        sourceId = "CITYWIDE",
-        daily_mean_pm25 = mean(daily_mean_pm25, na.rm = TRUE),
-        is_valid_day = n_valid_hours > 20,
-    )
-print(df_citywide_daily)
-df_daily_final <- rbind(df_daily, df_citywide_daily)
+# df_citywide_daily <- df_daily %>%
+#     #filter(is_valid_day) %>%
+#     group_by(date) %>%
+#     summarize(
+#         n_valid_hours = n(),
+#         datasourceId = "CITYWIDE",
+#         sourceId = "CITYWIDE",
+#         daily_mean_pm25 = mean(daily_mean_pm25, na.rm = TRUE),
+#         is_valid_day = n_valid_hours > 20,
+#     )
+# print(df_citywide_daily)
+#df_daily_final <-  rbind(df_daily, df_citywide_daily)
 
 
 
@@ -414,6 +414,9 @@ output_format <- tolower(Sys.getenv("OUTPUT_FORMAT", unset = "csv"))
 summary_daily_file <- paste(raw_minute_output_dir, "summary-daily-0.", output_format, sep = "")
 summery_hourly_file <- paste(raw_minute_output_dir, "summary-hourly-0.", output_format, sep = "")
 summary_completeness_file <- paste(raw_minute_output_dir, "summary-completeness-0.", output_format, sep = "")
+
+df_daily_final <- df_daily    # %>% mutate(type = "day")
+df_hourly_final <- df_hourly  # %>% mutate(type = "hour")
 
 # Write the chosen format to disk
 cat("Writing as OUTPUT_FORMAT=", output_format, " format...\n", sep = "")

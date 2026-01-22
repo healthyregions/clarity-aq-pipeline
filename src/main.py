@@ -3,6 +3,11 @@ import os
 import subprocess
 import sys
 
+import numpy as np
+import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
+
 from config import log, CLARITY_HOSTNAME, CLARITY_USE_CONTINUATION_TOKEN, LOCAL_OUTPUT_DIR
 from config import HISTORICAL_START_TIME, HISTORICAL_END_TIME
 from config import CONTINUATION_TOKEN_OUTPUT_PATH
@@ -22,14 +27,15 @@ def main(args):
         sys.exit(0)
 
 
-    if not args.clean and not args.historical and not args.recent and not args.push:
-        log.error('You must specify either -c (--clean), -H (--historical), -r (--recent), or -p (--push)')
+    # Sanity check - make sure our given arguments make sense
+    if args.fetch and not args.historical and not args.recent:
+        log.error('Fetch (-f) requires either --historical (-H) or --recent (-r)')
         sys.exit(200)
 
 
     # Fetch recent measurements from the clarity API
     # Write raw metrics (uncleaned) into the output folder
-    if args.recent:
+    if args.fetch and args.recent:
         log.info(f'Fetching recent measurement data from: {CLARITY_HOSTNAME}')
         clarity = RecentMeasurements()
         csv_contents = clarity.recent_fetch_metrics()
@@ -45,7 +51,7 @@ def main(args):
 
     # Fetch historical measurements from the clarity API
     # Write raw metrics (uncleaned) into the output folder
-    if args.historical:
+    if args.fetch and args.historical:
         log.info(f'Fetching historical measurement data from: {CLARITY_HOSTNAME}')
         log.info(f'    Start time: {HISTORICAL_START_TIME}')
         log.info(f'    End time  : {HISTORICAL_END_TIME}')
@@ -79,6 +85,56 @@ def main(args):
         except FileNotFoundError:
             print('Rscript not found.')
 
+        if not args.merge:
+            sys.exit(0)
+
+    # Download existing parquet files from S3, merge latest data, and output the merged parquet file
+    # TODO: ignore duplicates? or overwrite? need to pick a conflict-resolution strategy
+    if args.merge:
+        log.info(f'Running args.merge test...')
+
+        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm25
+        log.info(f'Generating latest parquet file: noop')
+        hourly = pd.read_csv('data/summary-hourly-0.csv')
+        hourly['type'] = 'hour'
+        hourly.rename(inplace=True, columns={
+            'n_obs': 'n_valid',
+            'is_valid_hour': 'is_valid',
+            'hour': 'date'
+        })
+        print(hourly)
+
+        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+        daily = pd.read_csv('data/summary-daily-0.csv')
+        daily['type'] = 'day'
+        daily.rename(inplace=True, columns={
+            'n_valid_hours': 'n_valid',
+            'is_valid_day': 'is_valid',
+            'daily_mean_pm25': 'mean_pm25',
+        })
+        print(daily)
+
+        # Merge daily + hourly into a single pivoted dataframe
+        new_sensor_df = pd.concat([daily, hourly]).pivot(index=['type','date'], columns=['datasourceId'], values='mean_pm25')
+        #new_sensor_df.to_csv('data/example-pivoted.csv')
+
+        new_sensor_df['full_network'] = new_sensor_df.mean(axis=1)
+        print(new_sensor_df)
+
+
+        # TODO: Fetch existing parquet file, if one exists in S3, read into dataframe
+
+        # Merge latest data into existing dataframe, write as parquet file
+        log.info(f'Merging with existing parquet file from CSV: noop')
+        #prev_df = pd.read_parquet('data/example.parquet')
+        #merged_df = pd.concat([prev_df, new_df], ignore_index=True)
+        #table = pa.Table.from_pandas(merged_df)
+        #pq.write_table(table, 'data/merged.parquet')
+        #merged_df.to_csv('data/merged.csv')
+
+        # TODO: Yearly process to move existing parquet data into a folder labeled with the year.
+        #     This should prevent each file from getting too large as the years stretch on.
+
         if not args.push:
             sys.exit(0)
 
@@ -87,12 +143,6 @@ def main(args):
     if args.push:
         s3api = S3API()
         latest_timestamp = s3api.generate_index_file()
-
-        # TODO: Fetch existing parquet file, if one exists in S3
-        # TODO: Create a new parquet file if one doesn't exist
-        # TODO: Merge new data into parquet file
-        # TODO: Yearly process to move existing parquet data into a folder labeled with the year.
-        #     This should prevent each file from getting too large as the years stretch on.
 
         # Mapping of local file source path -> destination path within S3
         outfile_mapping: dict[str, list[str]] = {
@@ -123,6 +173,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Chicago Air Quality Sensor Grid')
     parser.add_argument('-i', '--index', action='store_true',
                         help="DEBUG ONLY: generate index.json file, but don't fetch or push new data")
+    parser.add_argument('-m', '--merge', action='store_true',
+                        help="DEBUG ONLY: download and merge with existing parquet data")
+    parser.add_argument('-f', '--fetch', action='store_true',
+                        help="Fetch new measurements historical measurements between startTime and endTime (may take awhile)")
     parser.add_argument('-r', '--recent', action='store_true',
                         help="Compute recent measurements data between startTime and now")
     parser.add_argument('-H', '--historical', action='store_true',
@@ -130,6 +184,6 @@ if __name__ == '__main__':
     parser.add_argument('-c', '--clean', action='store_true',
                         help="Clean the measurement data by running the related R script, compute daily/hourly averages")
     parser.add_argument('-p', '--push', action='store_true',
-                        help='Generate a new index (implies -i), then upload resulting output data to S3 (MinIO or AWS S3)')
+                        help='Generate a new index (implies -i and -m), then upload resulting output data to S3 (MinIO or AWS S3)')
 
     main(args=parser.parse_args())
