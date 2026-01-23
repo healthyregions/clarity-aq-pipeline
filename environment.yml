@@ -5,6 +5,9 @@ dependencies:
   - pyopenssl=24.3.0
   - python=3.12.7
   - s3fs=2025.3.0
+
+  # TODO - pin all versions
   - requests
   - pandas
   - pyarrow
+  - python-dateutil

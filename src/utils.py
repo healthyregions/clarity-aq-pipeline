@@ -1,24 +1,160 @@
 import json
 from decimal import Decimal
+from datetime import datetime, UTC
+from dateutil.relativedelta import relativedelta
 
 import pandas as pd
 from pandas import DataFrame
 from pathlib import Path
 
-# TODO: Currently unused, but one idea for the near future
-# Helper enum to compute adjacent date ranges
-from enum import Enum
-class OperationPeriod(Enum):
-    YEARLY = 1
-    MONTHLY = 2
-    WEEKLY = 3
-    DAILY = 4
-    HOURLY = 5
 
-    SEASONAL = 6
-    # Add new periods here
-    # THIRTY_MIN = 6
-    # FIFTEEN_MIN = 7
+# TODO: is this needed??
+# Use now's date to find start and end of current hour
+#   Used for --recent --hourly
+def get_current_hour_dates():
+    return
+
+# TODO: is this needed??
+# Use now's date to find start and end of previous week
+#   Used for --historical --hourly
+def get_previous_hour_dates():
+    return
+
+# Use today's date to find start and end of previous week
+#   Used for --recent --daily
+def get_current_day_dates():
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + relativedelta(days=1, microsecond=-1)
+
+    return today_start, today_end
+
+# Use today's date to find start and end of previous week
+#   Used for --historical --daily
+def get_previous_day_dates():
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today - relativedelta(days=1)
+    yesterday_end = today - relativedelta(microsecond=1)
+
+    return yesterday_start, yesterday_end
+
+# Use today's date to find start and end of previous week
+#   Used for --recent --weekly
+def get_current_week_dates():
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    current_week_start = today - relativedelta(days=today.weekday())
+    current_week_end = current_week_start + relativedelta(days=7, microsecond=-1)
+
+    return current_week_start, current_week_end
+
+
+# Use today's date to find start and end of previous week
+#   Used for --historical --weekly
+def get_previous_week_dates():
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    previous_week_start = today - relativedelta(days=7+today.weekday())
+    previous_week_end = previous_week_start + relativedelta(days=7, microsecond=-1)
+
+    return previous_week_start, previous_week_end
+
+
+# Use today's date to find start and end of previous week
+#   Used for --recent --monthly
+def get_current_month_dates():
+    current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    current_month_end = current_month_start + relativedelta(months=1)
+
+    return current_month_start, current_month_end
+
+
+# Use today's date to find start and end of previous week
+#   Used for --historical --monthly
+def get_previous_month_dates():
+    current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    previous_month_start = current_month_start - relativedelta(months=1)
+    previous_month_end = current_month_start - relativedelta(microsecond=1)
+
+    return previous_month_start, previous_month_end
+
+
+# For simplicity, "season" is currently defined as a set of months
+#   S1 => Spring => 3/21 ~ 6/21
+#   S2 => Summer => 6/21 ~ 9/23
+#   S3 => Fall => 9/23 ~ 12/21
+#   S4 => Winter => 12/21 ~ 3/21
+def get_seasonal_boundaries(date=datetime.now(UTC)):
+    month_start = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month = month_start.month
+    year = month_start.year
+    day_of_month = month_start.day
+
+    return {
+        'S1': (datetime(year, 3, 21), datetime(year, 6, 21) - relativedelta(microsecond=1)),
+        'S2': (datetime(year, 6, 21), datetime(year, 9, 23) - relativedelta(microsecond=1)),
+        'S3': (datetime(year, 9, 23), datetime(year, 12, 21) - relativedelta(microsecond=1)),
+
+        # Winter may use last year or next year
+        'S4': (
+            # We are late in the winter, it has lasted since last year
+            datetime(year, 12, 21) if month == 12 and day_of_month >= 21 \
+                # We are early in the winter, it will last until next year
+            else datetime(year - 1, 12, 21),
+            # We are late in the winter, it has lasted since last year
+            datetime(year + 1, 3, 21) - relativedelta(microsecond=1) if month == 12 and day_of_month >= 21 \
+                # We are early in the winter, it will last until next year
+            else datetime(year, 3, 21) - relativedelta(microsecond=1)
+        ),
+    }
+
+
+# Given a date, return the name of the season that it falls into
+def get_season(date=datetime.now(UTC)):
+    seasonal_bounds = get_seasonal_boundaries(date=date)
+    for season in seasonal_bounds:
+        (season_start, season_end) = seasonal_bounds[season]
+        if season_start <= date <= season_end:
+            return season
+
+    return None
+
+
+# Compute today's timestamp, use that to find first microsecond of the previous season
+def get_previous_season_dates():
+    # Compute all seasonal boundaries
+    seasonal_bounds = get_seasonal_boundaries()
+    current_season = get_season()
+    (current_season_start, current_season_end) = seasonal_bounds[current_season]
+
+    # Arbitrarily subtract 2 days (any number > 1 will do)
+    a_day_last_season = current_season_start - relativedelta(days=2)
+    previous_season = get_season(date=a_day_last_season)
+
+    return seasonal_bounds[previous_season]
+
+
+# Compute today's timestamp, use that to find first microsecond of the current season
+def get_current_season_dates():
+    current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    bounds = get_seasonal_boundaries(date=current_month_start)
+    current_season = get_season(date=current_month_start)
+
+    return bounds[current_season]
+
+
+# Compute today's timestamp, use that to find first microsecond of the previous year
+def get_previous_year_dates():
+    current_year_start = datetime.now(UTC).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    previous_year_start  = current_year_start - relativedelta(years=1)
+    previous_year_end  = current_year_start - relativedelta(microsecond=1)
+
+    return previous_year_start, previous_year_end
+
+# Compute today's timestamp, use that to find first microsecond of the current year
+def get_current_year_dates():
+    current_year_start = datetime.now(UTC).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    current_year_end  = current_year_start + relativedelta(years=1, microsecond=-1)
+
+    return current_year_start, current_year_end
+
 
 def truncate(full_str: str, limit = 20):
     return f'{full_str[:limit]}...' if len(full_str) > limit else full_str
