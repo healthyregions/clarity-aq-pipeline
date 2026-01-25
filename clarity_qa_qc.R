@@ -6,8 +6,6 @@ library(slider)
 library(arrow)
 
 # Read configuration from environment variables
-raw_historical_input_path <- Sys.getenv("HISTORICAL_RAW_INPUT_PATH", unset = "./data/raw-measurements-historical.csv")
-raw_recent_input_path <- Sys.getenv("RECENT_RAW_INPUT_PATH", unset = "./data/raw-measurements-recent.csv")
 
 log_level <- Sys.getenv("LOGLEVEL", unset = "info")
 raw_minute_output_dir <- Sys.getenv("CLEANED_OUTPUT_DIR", unset = "./data/")
@@ -22,14 +20,13 @@ if (length(args) == 0) {
     quit(status=-1)
 } else if (args[1] == "--recent") {
     cat("Cleaning recent sensor measurement data...\n", sep = "")
-    raw_input_path <- raw_recent_input_path
+    raw_input_path <- Sys.getenv("RECENT_RAW_INPUT_PATH", unset = "./data/raw-measurements-recent.csv")
 } else if (args[1] == "--historical") {
     cat("Cleaning historical sensor measurement data...\n", sep = "")
-    raw_input_path <- raw_historical_input_path
+    raw_input_path <- Sys.getenv("HISTORICAL_RAW_INPUT_PATH", unset = "./data/raw-measurements-historical.csv")
 } else {
     cat("ERROR: Unrecognized argument: ", args[1], "\n", sep = "")
-    cat("   Please specify either --recent or --historical\n", sep = "")
-    quit(status=-2)
+    raw_input_path <- Sys.getenv("RAW_INPUT_PATH", unset = "./data/raw-measurements-historical.csv")
 }
 
 
@@ -290,83 +287,134 @@ pm_col <- "pm2_5ConcMassIndividual.raw"
 min_obs_per_hour <- 3
 
 # Compute hourly stats for ALL hours
+# Date Format:  2026-01-01 00:00:00, 2026-01-01 01:00:00, etc
 hourly <- df0 %>%
-  mutate(hour = floor_date(time, unit = "hour")) %>%
-  group_by(datasourceId, sourceId, hour) %>%
+  mutate(date = floor_date(time, unit = "hour")) %>%
+  group_by(datasourceId, sourceId, date) %>%
   summarise(
-    n_obs = sum(!is.na(.data[[pm_col]])),
+    n_valid = sum(!is.na(.data[[pm_col]])),
+    type = "hour",
     mean_pm25 = mean(.data[[pm_col]], na.rm = TRUE),
     .groups = "drop"
   ) %>%
-  mutate(is_valid_hour = n_obs >= min_obs_per_hour)
+  mutate(is_valid = n_valid >= min_obs_per_hour)
 
-cat("Hourly rows (all):", nrow(hourly), "\n")
-
-# Keep only valid hour rows 
+# Keep only valid hour rows
 # Keep hours with n_obs ≥ 3 (completeness ≥ 75%)
+cat("Hourly rows (all): ", nrow(hourly), "\n")
 df_hourly <- hourly %>%
-  filter(is_valid_hour) %>%
-  select(datasourceId, sourceId, hour, mean_pm25, n_obs, is_valid_hour)
-
+  filter(is_valid) %>%
+  select(datasourceId, sourceId, date, mean_pm25, n_valid, is_valid)
 cat("Valid hourly rows (>=75% completeness): ", nrow(df_hourly), "\n")
 
 
 # Daily data
 # Daily aggregation data using only valid hours
 daily <- df_hourly %>%
-  mutate(date = as_date(hour)) %>%
+  # Date Format:  2026-01-01, 2026-01-02, etc
+  mutate(date = as_date(date)) %>%
   group_by(datasourceId, sourceId, date) %>%
   summarise(
-    n_valid_hours = n(),                     # Count of valid hours
-    daily_mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid hourly means
+    n_valid = n(),                     # Count of valid hours
+    type = "day",
+    mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid hourly means
     .groups = "drop"
   ) %>%
-  mutate(is_valid_day = n_valid_hours > 20) # >20 hours
-
-cat("Daily rows (all):", nrow(daily), "\n")
+  mutate(is_valid = n_valid > 20) # >20 hours
 
 # Keep only valid days
-df_daily <- daily %>% filter(is_valid_day)
-cat("Valid daily rows (>20 valid hours):", sum(daily$is_valid_day, na.rm = TRUE), "\n")
+cat("Daily rows (all): ", nrow(daily), "\n")
+df_daily <- daily %>% filter(is_valid)
+cat("Valid daily rows (>20 valid hours): ", nrow(df_daily), "\n")
 
 
 # TODO: get real average code from UIC
 # stuff below is pretty much just made up
 
-# If today is first of week/month/year, calculate weekly/monthly/yearly average for previous week/month/year
-today_date <- today()
-is_first_of_week <- weekdays(today_date) == "Monday"
-is_first_of_month <- mday(today_date) == 1
-is_first_of_year <- yday(today_date) == 1
 
-# TODO: Possibly for the future?
-if (is_first_of_week) {
-#     weekly <- df_daily %>%
-#       group_by(datasourceId, sourceId, date) %>%
-#       summarise(
-#         n_valid_days = n(),                     # Count of valid days
-#         weekly_mean_pm25 = mean(daily_mean_pm25, na.rm = TRUE),  # Mean of valid daily means
-#         .groups = "drop"
-#       ) %>%
-#       mutate(is_valid_week = n_valid_days > 5) # FIXME:  >5 days?
-#
-#     cat("Weekly rows (all):", nrow(weekly), "\n")
-#
-#     # Keep only valid weeks
-#     df_weekly <- weekly %>% filter(is_valid_week)
-}
+# Weekly aggregation data using only valid days
+weekly <- df_daily %>%
+  # Date Format: 2026-W01, 2026-W02, etc
+  mutate(date = paste(lubridate::year(date), sprintf("%02d", lubridate::isoweek(date)),sep = "-W")) %>%
+  group_by(datasourceId, sourceId, date) %>%
+  summarise(
+    n_valid = n(),                     # Count of valid days
+    type = "week",
+    mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid daily means
+    .groups = "drop"
+  ) %>%
+  mutate(is_valid = n_valid > 5) # >5 days
+
+# Keep only valid weeks
+cat("Weekly rows (all): ", nrow(weekly), "\n")
+df_weekly <- weekly %>% filter(is_valid)
+cat("Valid weekly rows (>5 valid days):" , nrow(df_weekly), "\n")
 
 
-if (is_first_of_month) {
+# Monthly aggregation data using only valid days
+# Date Format:  2026-01, 2026-02, etc
+monthly <- df_daily %>%
+  mutate(date = paste(lubridate::year(date), lubridate::month(date), sep = "-")) %>%
+  group_by(datasourceId, sourceId, date) %>%
+  summarise(
+    n_valid = n(),                     # Count of valid days
+    type = "month",
+    mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid daily means
+    .groups = "drop"
+  ) %>%
+  mutate(is_valid = n_valid > 21) # >21 days
 
-}
+# Keep only valid months
+cat("Monthly rows (all): ", nrow(monthly), "\n")
+df_monthly <- monthly %>% filter(is_valid)
+cat("Valid monthly rows (>21 valid days): ", nrow(df_monthly), "\n")
 
-if (is_first_of_year) {
 
-}
+# Seasonal aggregation data using only valid days
+# Date Format:  2026-S1, 2026-S2, etc
+seasonal <- df_daily %>%
+  mutate(date = paste(lubridate::year(date), case_match(month(floor_date(date, "season")), 3 ~ "S01", 6 ~ "S02", 9 ~ "S03", 12 ~ "S04"), sep = "-")) %>%
+  group_by(datasourceId, sourceId, date) %>%
+  summarise(
+    n_valid = n(),                     # Count of valid days
+    type = "season",
+    mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid daily means
+    .groups = "drop"
+  ) %>%
+  mutate(is_valid = n_valid > 60) # >60 days
+
+# Keep only valid seasons
+cat("Seasonal rows (all): ", nrow(seasonal), "\n")
+df_seasonal <- seasonal %>% filter(is_valid)
+cat("Valid seasonal rows (>60 valid days): ", nrow(df_seasonal), "\n")
+
+
+# Yearly aggregation data using only valid days
+# Date Format:  2026, 2025, etc
+yearly <- df_daily %>%
+  mutate(date = lubridate::year(floor_date(date))) %>%
+  group_by(datasourceId, sourceId, date) %>%
+  summarise(
+    n_valid = n(),                     # Count of valid days
+    type = "year",
+    mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid daily means
+    .groups = "drop"
+  ) %>%
+  mutate(is_valid = n_valid > 220) # >220 days
+
+# Keep only valid years
+cat("Yearly rows (all): ", nrow(yearly), "\n")
+df_yearly <- yearly %>% filter(is_valid)
+cat("Valid yearly rows (>220 valid days): ", nrow(df_yearly), "\n")
+
 
 if (log_level == 'debug') {
     print(df_hourly)
+    print(df_daily)
+    print(df_weekly)
+    print(df_monthly)
+    print(df_seasonal)
+    print(df_yearly)
 }
 # df_citywide_hourly <- df_hourly %>%
 #     #filter(is_valid_hour) %>%
@@ -381,9 +429,6 @@ if (log_level == 'debug') {
 # print(df_citywide_hourly)
 #df_hourly_final < - rbind(df_hourly, df_citywide_hourly)
 
-if (log_level == 'debug') {
-    print(df_daily)
-}
 # df_citywide_daily <- df_daily %>%
 #     #filter(is_valid_day) %>%
 #     group_by(date) %>%
@@ -408,7 +453,7 @@ sensor_hourly_comp <- hourly %>%
   group_by(datasourceId, sourceId) %>%
   summarise(
     hours_total = n(),
-    hours_valid = sum(is_valid_hour),
+    hours_valid = sum(is_valid),
     pct_valid   = 100 * hours_valid / pmax(hours_total, 1),
     .groups = "drop"
   )
@@ -416,27 +461,47 @@ sensor_hourly_comp <- hourly %>%
 print(head(sensor_hourly_comp))
 
 # Build up file name based on dataframe name + output_format (default=parquet)
-summary_daily_file <- paste(raw_minute_output_dir, "summary-daily.", output_format, sep = "")
-summery_hourly_file <- paste(raw_minute_output_dir, "summary-hourly.", output_format, sep = "")
 summary_completeness_file <- paste(raw_minute_output_dir, "summary-completeness.", output_format, sep = "")
+summery_hourly_file <- paste(raw_minute_output_dir, "summary-hourly.", output_format, sep = "")
+summary_daily_file <- paste(raw_minute_output_dir, "summary-daily.", output_format, sep = "")
+summary_weekly_file <- paste(raw_minute_output_dir, "summary-weekly.", output_format, sep = "")
+summary_monthly_file <- paste(raw_minute_output_dir, "summary-monthly.", output_format, sep = "")
+summary_seasonal_file <- paste(raw_minute_output_dir, "summary-seasonal.", output_format, sep = "")
+summary_yearly_file <- paste(raw_minute_output_dir, "summary-yearly.", output_format, sep = "")
 
-df_daily_final <- df_daily    # %>% mutate(type = "day")
 df_hourly_final <- df_hourly  # %>% mutate(type = "hour")
+df_daily_final <- df_daily    # %>% mutate(type = "day")
+df_weekly_final <- df_weekly  # %>% mutate(type = "week")
+df_monthly_final <- df_monthly  # %>% mutate(type = "month")
+df_seasonal_final <- df_seasonal  # %>% mutate(type = "season")
+df_yearly_final <- df_yearly  # %>% mutate(type = "year")
 
 # Write the chosen format to disk
 cat("Writing as OUTPUT_FORMAT=", output_format, " format...\n", sep = "")
 if (output_format == "parquet") {
-    write_parquet(x = df_daily_final, sink = summary_daily_file)
-    write_parquet(x = df_hourly_final, sink = summery_hourly_file)
     write_parquet(x = sensor_hourly_comp, sink = summary_completeness_file)
+    write_parquet(x = df_hourly_final, sink = summery_hourly_file)
+    write_parquet(x = df_daily_final, sink = summary_daily_file)
+    write_parquet(x = df_weekly_final, sink = summary_weekly_file)
+    write_parquet(x = df_monthly_final, sink = summary_monthly_file)
+    write_parquet(x = df_seasonal_final, sink = summary_seasonal_file)
+    write_parquet(x = df_yearly_final, sink = summary_yearly_file)
 } else if (output_format == "csv") {
-    write.csv(df_daily_final, summary_daily_file, row.names = FALSE)
-    write.csv(df_hourly_final, summery_hourly_file, row.names = FALSE)
     write.csv(sensor_hourly_comp, summary_completeness_file, row.names = FALSE)
+    write.csv(df_hourly_final, summery_hourly_file, row.names = FALSE)
+    write.csv(df_daily_final, summary_daily_file, row.names = FALSE)
+    write.csv(df_weekly_final, summary_weekly_file, row.names = FALSE)
+    write.csv(df_monthly_final, summary_monthly_file, row.names = FALSE)
+    write.csv(df_seasonal_final, summary_seasonal_file, row.names = FALSE)
+    write.csv(df_yearly_final, summary_yearly_file, row.names = FALSE)
 } else if (output_format == "json") {
-    jsonlite::write_json(df_daily_final, summary_daily_file, pretty = FALSE)
-    jsonlite::write_json(df_hourly_final, summery_hourly_file, pretty = FALSE)
     jsonlite::write_json(sensor_hourly_comp, summary_completeness_file, pretty = FALSE)
+    jsonlite::write_json(df_hourly_final, summery_hourly_file, pretty = FALSE)
+    jsonlite::write_json(df_daily_final, summary_daily_file, pretty = FALSE)
+    jsonlite::write_json(df_weekly_final, summary_weekly_file, pretty = FALSE)
+    jsonlite::write_json(df_monthly_final, summary_monthly_file, pretty = FALSE)
+    jsonlite::write_json(df_seasonal_final, summary_seasonal_file, pretty = FALSE)
+    jsonlite::write_json(df_yearly_final, summary_yearly_file, pretty = FALSE)
 } else {
     cat("Skipping writing unknown file format: \"", output_format, "\"\n", sep = "")
 }

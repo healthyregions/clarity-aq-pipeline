@@ -77,7 +77,7 @@ class HistoricalMeasurements(ClarityAPI):
             r = requests.get(url=url)
             historical_report_partial_df = self.parse_results_csv_wide(r=r)
             #report_metadata[url] = { "contents": r.text, "index": idx, "url": url }
-            historical_report_df = pd.concat([historical_report_df, historical_report_partial_df], ignore_index=True)
+            historical_report_df = pd.concat([historical_report_df, historical_report_partial_df])
 
         # Gather datasourceId, sourceId -> latlong coords, merge with existing dataframe
         log.debug('Gathering locations...')

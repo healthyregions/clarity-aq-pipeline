@@ -7,11 +7,14 @@ import sys
 import pandas as pd
 import pyarrow as pa
 
+
+from datetime import datetime, UTC
 from config import log, CLARITY_HOSTNAME, LOCAL_OUTPUT_DIR, LOGLEVEL
 from config import HISTORICAL_START_TIME, HISTORICAL_END_TIME
 from historical import HistoricalMeasurements
 from recent import RecentMeasurements
 from s3 import S3API
+from utils import get_previous_week_dates
 
 
 logging.getLogger('config').setLevel(level=logging.getLevelName(LOGLEVEL))
@@ -25,22 +28,31 @@ logging.getLogger('botocore.hooks').setLevel(level=logging.INFO)
 def main(args):
     s3api = S3API()
 
-    if args.archive:
-        log.error('Performing yearly archive process.')
-        s3api.archive_current_dataset()
-        log.error('Yearly archive process complete!')
+    if args.backup:
+        # Use current UTC timestamp as folder_name
+        folder_name = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z')
+        log.error(f'Backing up Parquet datasets: {folder_name}')
+        destination_folder = s3api.backup_current_dataset(folder_name=folder_name)
+        log.error(f'Parquet backup process complete: {destination_folder}')
         sys.exit(0)
 
     # Sanity check - make sure that fetch was provided either --recent or --historical
-    if args.fetch and not args.historical and not args.recent:
-        log.error('Fetch (-f) requires either --historical (-H) or --recent (-r)')
+    if (args.fetch or args.clean) and not args.historical and not args.recent:
+        log.error('ERROR: When using --fetch (-f) or --clean, onr of --historical (-H) or --recent (-r) is required')
         sys.exit(200)
 
     # Sanity check - make sure user hasn't specified both --recent and --historical
-    if  args.historical and args.recent:
-        log.error('--recent (-r) and --historical (-H) are mutually exclusive - please choose only one of these flags')
+    if args.historical and args.recent:
+        log.error('ERROR: please choose only one of  --recent (-r) or --historical (-H)')
         sys.exit(300)
 
+    # if args.weekly:
+    #     prev_week_start, prev_week_end = get_previous_week_dates()
+    #     log.info(f'Fetching weekly historical measurement data from: {CLARITY_HOSTNAME}')
+    #     log.info(f'    Start Time: {prev_week_start}')
+    #     log.info(f'    End time  : {prev_week_end}')
+    #
+    #     sys.exit(0)
 
     # Fetch recent measurements from the clarity API
     # Write raw metrics (uncleaned) into the output folder
@@ -133,8 +145,48 @@ def main(args):
         })
         daily['type'] = 'day'
 
+
+        weekly = pd.read_csv('data/summary-weekly.csv').rename(columns={
+            'n_valid_days': 'n_valid',
+            'is_valid_week': 'is_valid',
+            'week': 'date',
+            'weekly_mean_pm25': 'mean_pm25',
+            # .. define new metrics here, use consistent column names for hourly + daily ... #
+        })
+        weekly['type'] = 'week'
+
+
+        monthly = pd.read_csv('data/summary-monthly.csv').rename(columns={
+            'n_valid_days': 'n_valid',
+            'is_valid_month': 'is_valid',
+            'month': 'date',
+            'monthly_mean_pm25': 'mean_pm25',
+            # .. define new metrics here, use consistent column names for hourly + daily ... #
+        })
+        monthly['type'] = 'month'
+
+
+        seasonal = pd.read_csv('data/summary-seasonal.csv').rename(columns={
+            'n_valid_days': 'n_valid',
+            'is_valid_season': 'is_valid',
+            'season': 'date',
+            'seasonal_mean_pm25': 'mean_pm25',
+            # .. define new metrics here, use consistent column names for hourly + daily ... #
+        })
+        seasonal['type'] = 'season'
+
+        yearly = pd.read_csv('data/summary-yearly.csv').rename(columns={
+            'n_valid_days': 'n_valid',
+            'is_valid_season': 'is_valid',
+            'season': 'date',
+            'yearly_mean_pm25': 'mean_pm25',
+            # .. define new metrics here, use consistent column names for hourly + daily ... #
+        })
+        seasonal['type'] = 'season'
+
+
         # Merge daily + hourly into a single pivoted dataframe
-        merged_sensor_df = pd.concat([daily, hourly])
+        merged_sensor_df = pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
         log.debug(merged_sensor_df)
 
         # Repeat this process process each
@@ -170,8 +222,8 @@ if __name__ == '__main__':
                         help="Clean the measurement data by running the related R script, compute daily/hourly averages")
     parser.add_argument('-m', '--merge', action='store_true',
                         help="Merge new date into existing parquet dataset in S3 (MinIO or AWS S3)")
-    parser.add_argument('-a', '--archive', action='store_true',
-                        help="Archive existing metrics.parquet files to per-year folders and start with a fresh /current/ folder in S3")
+    parser.add_argument('-b', '--backup', action='store_true',
+                        help="Backup existing parquet files in S3")
 
     main(args=parser.parse_args())
 
