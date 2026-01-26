@@ -335,7 +335,7 @@ cat("Valid daily rows (>20 valid hours): ", nrow(df_daily), "\n")
 # Weekly aggregation data using only valid days
 weekly <- df_daily %>%
   # Date Format: 2026-W01, 2026-W02, etc
-  mutate(date = paste(lubridate::year(date), sprintf("%02d", lubridate::isoweek(date)),sep = "-W")) %>%
+  mutate(date = paste(lubridate::isoyear(date), sprintf("%02d", lubridate::isoweek(date)),sep = "-W")) %>%
   group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = n(),                     # Count of valid days
@@ -347,8 +347,8 @@ weekly <- df_daily %>%
 
 # Keep only valid weeks
 cat("Weekly rows (all): ", nrow(weekly), "\n")
-df_weekly <- weekly %>% filter(is_valid)
-cat("Valid weekly rows (>5 valid days):" , nrow(df_weekly), "\n")
+df_weekly <- weekly #%>% filter(is_valid)
+#cat("Valid weekly rows (>5 valid days):" , nrow(df_weekly), "\n")
 
 
 # Monthly aggregation data using only valid days
@@ -366,8 +366,8 @@ monthly <- df_daily %>%
 
 # Keep only valid months
 cat("Monthly rows (all): ", nrow(monthly), "\n")
-df_monthly <- monthly %>% filter(is_valid)
-cat("Valid monthly rows (>21 valid days): ", nrow(df_monthly), "\n")
+df_monthly <- monthly #%>% filter(is_valid)
+#cat("Valid monthly rows (>21 valid days): ", nrow(df_monthly), "\n")
 
 
 # Seasonal aggregation data using only valid days
@@ -385,8 +385,8 @@ seasonal <- df_daily %>%
 
 # Keep only valid seasons
 cat("Seasonal rows (all): ", nrow(seasonal), "\n")
-df_seasonal <- seasonal %>% filter(is_valid)
-cat("Valid seasonal rows (>60 valid days): ", nrow(df_seasonal), "\n")
+df_seasonal <- seasonal #%>% filter(is_valid)
+#cat("Valid seasonal rows (>60 valid days): ", nrow(df_seasonal), "\n")
 
 
 # Yearly aggregation data using only valid days
@@ -404,8 +404,8 @@ yearly <- df_daily %>%
 
 # Keep only valid years
 cat("Yearly rows (all): ", nrow(yearly), "\n")
-df_yearly <- yearly %>% filter(is_valid)
-cat("Valid yearly rows (>220 valid days): ", nrow(df_yearly), "\n")
+df_yearly <- yearly #%>% filter(is_valid)
+#cat("Valid yearly rows (>220 valid days): ", nrow(df_yearly), "\n")
 
 
 if (log_level == 'debug') {

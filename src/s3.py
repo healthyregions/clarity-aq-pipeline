@@ -2,6 +2,7 @@ import json
 from datetime import datetime, UTC
 from time import sleep
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -98,18 +99,25 @@ class S3API(object):
     #   - Overwrite this file in S3
     #   - Release the lock to end data writing
     def update_measurements_df(self, new_measurements_df, metric_name):
-        # Recompute full_network average, update dataset in S3
-        new_measurements_df['full_network'] = new_measurements_df.mean(axis=1, numeric_only=True)
-
         log.debug(new_measurements_df.info())
 
-        # Ensure the date column is in datetime format?
+        # Recompute full_network average, update dataset in S3
+        new_measurements_df['full_network'] = new_measurements_df.drop(columns=['type','date','full_network']).mean(axis=1, numeric_only=True, skipna=True)
+        #new_measurements_df.loc[:, new_measurements_df.columns not in ['type','date','full_network']].mean()
+        # TODO: Ensure the columns in optimal order
+        columns = new_measurements_df.columns
+        new_measurements_df = new_measurements_df[['type','date','full_network',*columns[2:-1]]]
+
+        # TODO: Ensure the date column is in datetime format?
         # TODO: This approach might not work for weekly or seasonal, since those contain characters (even tho they use ISO 8601-2)
         # merged_df['date'] = pd.to_datetime(merged_df['date'], utc=True, format='ISO8601', yearfirst=True, dayfirst=False)
 
         # Define custom categories for the "type" column, maintain this order
         custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
         new_measurements_df['type'] = pd.Categorical(new_measurements_df['type'], categories=custom_order, ordered=True)
+        new_measurements_df['date'] = new_measurements_df['date'].astype('str')
+
+        #structured_df = pd.DataFrame(columns=['type','date','full_network',*columns[2:-1]])
 
         log.debug(new_measurements_df.info())
 
@@ -118,7 +126,7 @@ class S3API(object):
             df_path=f'{S3_BUCKET_NAME}/current/{metric_name}.parquet',
             data_to_merge=new_measurements_df,
             columns=['type', 'date'],
-            sort_asc=[True, False]
+            sort_asc=[True, False],
         )
 
 
@@ -132,7 +140,10 @@ class S3API(object):
         return self.merge_parquet_dataset(
             df_path=f'{S3_BUCKET_NAME}/current/locations.parquet',
             data_to_merge=new_locations_df,
+            drop_duplicates=True,
+            drop_na=True,
             columns=['datasourceId','sourceId'],
+            sort=True,
             sort_asc=True
         )
 
@@ -157,35 +168,75 @@ class S3API(object):
             self.unlock()
 
 
-    def merge_parquet_dataset(self, df_path, data_to_merge, columns, sort_asc=True, drop_duplicates=True, drop_na=True):
+    def get_existing_dataset(self, df_path, columns, dtypes=None):
+        existing_df = self.read_file(path=df_path, file_format='parquet', binary=True)
+        if existing_df is None:
+            log.warn(f'No current dataset found - creating a new / empty dataset:{df_path} ')
+            existing_df = pd.DataFrame(columns=columns)
+            if dtypes is not None:
+                if isinstance(dtypes, str.__class__):
+                    # single type given, apply to all columns
+                    for col in columns:
+                        existing_df[col] = existing_df[col].astype(dtypes)
+
+                if isinstance(dtypes, list.__class__):
+                    # multiple types given, apply piecewise
+                    # assume some number as index columns
+                    if len(columns) != len(dtypes):
+                        log.warn('WARNING: column / dtype mismatch when calling get_existing_dataset. Columns={columns}, ')
+                    for col in columns:
+                        idx = columns.index(col)
+                        existing_df[col] = existing_df[col].astype(dtypes[idx])
+
+        return None
+
+    def read_dataset(self, df_path, columns):
+        # Get current dataset, or create a new one if it doesn't exist
+        existing_df = self.read_file(path=df_path, file_format='parquet', binary=True)
+        if existing_df is None:
+            log.warn(f'No current dataset found - creating a new / empty dataset:{df_path} ')
+            existing_df = pd.DataFrame(columns=columns)
+            if 'date' in columns:
+                existing_df['date'] = existing_df['date'].astype('str')
+            if 'type' in columns:
+                custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
+                existing_df['type'] = pd.Categorical(existing_df['type'], categories=custom_order,
+                                                             ordered=True)
+
+        return existing_df
+
+
+    def merge_parquet_dataset(self, df_path, data_to_merge, columns, sort=False, sort_asc: bool|list[bool]=True, drop_invalid=False, drop_duplicates=False, drop_na=False):
         # Always acquire lockfile before writing
         while not self.lock():
             log.warn('Waiting to acquire lockfile - retrying in 10s')
             sleep(10)
 
         try:
-            # Get current dataset, or create a new one if it doesn't exist
-            existing_df = self.read_file(path=df_path, file_format='parquet', binary=True)
-            if existing_df is None:
-                log.warn(f'No current dataset found - creating a new / empty dataset:{df_path} ')
-                existing_df = pd.DataFrame(columns=columns, index=columns)
+            existing_df = self.read_dataset(df_path=df_path, columns=columns)
 
             log.debug(existing_df.info())
             log.debug(existing_df)
 
             # Merge new sensor readings into existing dataset
-            merged_df = pd.merge(left=existing_df, right=data_to_merge, how='outer')
-            #merged_df = pd.concat([existing_df, data_to_merge])
-            #merged_df = merged_df.fillna(existing_df)
-            #merged_df.fillna(data_to_merge, inplace=True)
-            # merged_df = pd.concat([data_to_merge, existing_df]).fillna(existing_df).fillna(data_to_merge).drop_duplicates(subset=subset)
+            merged_df = pd.merge(left=data_to_merge, right=existing_df, how='left')
+            merged_df = pd.merge(left=merged_df, right=data_to_merge, how='left')
+            merged_df = merged_df.combine_first(existing_df)
+            merged_df = merged_df.combine_first(data_to_merge)
+
+            log.debug(merged_df.info())
+            log.debug(merged_df)
 
             # Sort by type / date to place duplicates next to each other
             # Group based on index, then take last value
-            merged_df = merged_df.groupby(merged_df.index).last()
+            #merged_df = merged_df.groupby(merged_df.index).last()
 
             # Drop any rows where index columns are NaN or empty
-            merged_df = merged_df[merged_df.index.notna()]
+            if drop_invalid:
+                merged_df = merged_df[merged_df.index.notna()]
+
+            # Fill in any None values with NaN (for consistency)
+            #merged_df.fillna(value=np.nan)
 
             # Drop duplicate index?
             if drop_duplicates:
@@ -200,6 +251,8 @@ class S3API(object):
 
             log.debug(merged_df.info())
             log.debug(merged_df)
+
+            log.debug(merged_df.loc[merged_df.isnull().any(axis=1)])
 
             # Write to S3 if dataset has changed
             self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
@@ -231,8 +284,12 @@ class S3API(object):
                 json.dumps(f)
             return self.client.stat(path)['size']
         if file_format == 'parquet':
-            # Convert to a PyArrow Table (to preserves the schema)
+            log.debug(contents.info())
+            log.debug(contents)
+
+            # Convert to a PyArrow Table (to preserve the schema)
             table = pa.Table.from_pandas(contents)
+            #log.debug(table)
             with self.client.open(path, mode) as f:
                 log.debug(f'Writing parquet file to S3: {path}')
                 pq.write_table(table, f)
@@ -255,14 +312,19 @@ class S3API(object):
         if file_format == 'json':
             # JSON file does not exist locally - read from S3 bucket as dict
             with self.client.open(path, mode) as f:
-                json_contents = json.load(f)
-                return json_contents, self.client.stat(path)['size']
+                return json.load(f), self.client.stat(path)['size']
         elif file_format == 'parquet':
             existing_dataset = None
             if self.client.exists(path):
                 with self.client.open(path, mode) as f:
                     log.debug(f'Reading existing parquet file from S3: {path}')
-                    existing_dataset = pd.read_parquet(f, engine='pyarrow')
+                    table = pq.read_table(f, use_pandas_metadata=True)
+                    #log.debug('Parsed table:')
+                    #log.debug(table)
+                    existing_dataset = table.to_pandas()
+                    log.debug('Parsed dataset:')
+                    log.debug(existing_dataset.info())
+                    log.debug(existing_dataset)
                     log.debug(f'Successfully read parquet file from S3: {path}')
             return existing_dataset
         elif file_format == 'raw':

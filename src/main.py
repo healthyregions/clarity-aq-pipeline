@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 
+import dateutil
 import pandas as pd
 import pyarrow as pa
 
@@ -134,6 +135,9 @@ def main(args):
         })
         hourly['type'] = 'hour'
 
+        # TODO: Ensure timestamp ISO 8601 Format indicating UTC timezone? browser needs special handling otherwise
+        # hourly['date'] = hourly['date'].map(lambda d: dateutil.parser.isoparse(d).isoformat() + 'Z')
+
         # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
         log.info(f'Compiling daily sensor data...')
         daily = pd.read_csv('data/summary-daily.csv').rename(columns={
@@ -155,6 +159,9 @@ def main(args):
         })
         weekly['type'] = 'week'
 
+        # Ensure date in the correct format - 2025-W10, 2025-W09, etc
+        weekly['date'] = weekly['date'].map(lambda d: d.split('-')[0]+'-W'+d.split('-')[1][1:].zfill(2))
+
 
         monthly = pd.read_csv('data/summary-monthly.csv').rename(columns={
             'n_valid_days': 'n_valid',
@@ -164,6 +171,9 @@ def main(args):
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
         monthly['type'] = 'month'
+
+        # Ensure date in the correct format - 2025-10, 2025-09, etc
+        monthly['date'] = monthly['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1].zfill(2))
 
 
         seasonal = pd.read_csv('data/summary-seasonal.csv').rename(columns={
@@ -175,6 +185,9 @@ def main(args):
         })
         seasonal['type'] = 'season'
 
+        # Ensure date in the correct format - 2025-S03, 2025-S02, etc
+        seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0]+'-S'+d.split('-')[1][1:].zfill(2))
+
         yearly = pd.read_csv('data/summary-yearly.csv').rename(columns={
             'n_valid_days': 'n_valid',
             'is_valid_season': 'is_valid',
@@ -182,20 +195,26 @@ def main(args):
             'yearly_mean_pm25': 'mean_pm25',
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
-        seasonal['type'] = 'season'
-
+        yearly['type'] = 'year'
 
         # Merge daily + hourly into a single pivoted dataframe
         merged_sensor_df = pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
+        # Define custom categories for the "type" column, maintain this order
+        custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
+        merged_sensor_df['type'] = pd.Categorical(merged_sensor_df['type'], categories=custom_order, ordered=True)
+        merged_sensor_df['date'] = merged_sensor_df['date'].astype('str')
+
+        log.debug(merged_sensor_df.info())
         log.debug(merged_sensor_df)
 
         # Repeat this process process each
         # TODO: Support other metrics?
         for metric in ['mean_pm25']:
             log.info(f'Pivoting data for {metric}.parquet')
-            new_sensor_df = merged_sensor_df.pivot(index=['type', 'date'], columns=['datasourceId'], values=metric)
+            new_sensor_df = pd.pivot_table(data=merged_sensor_df, values=metric, index=['type', 'date'], columns=['datasourceId'], aggfunc='last', dropna=True)
             new_sensor_df['full_network'] = new_sensor_df.mean(axis=1, skipna=True, numeric_only=True)
             new_sensor_df = new_sensor_df.rename(columns={'datasourceId': ''}).reset_index()
+            new_sensor_df.sort_values(inplace=True, by=['type','date'], ascending=[True, False])
             log.debug(new_sensor_df)
 
             # Merge latest data into existing dataframe, write as parquet file
