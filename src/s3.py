@@ -15,7 +15,7 @@ from config import S3_REGION, S3_STORAGE_CLASS, S3_BUCKET_NAME
 
 import duckdb
 
-from utils import merge_new_data, merge_locations, combine_dataset_rows
+from utils import merge_new_data
 
 # Connect to an in-memory DuckDB database
 con = duckdb.connect(database=':memory:')
@@ -107,43 +107,38 @@ class S3API(object):
     #   - Overwrite this file in S3
     #   - Release the lock to end data writing
     def update_measurements_df(self, new_measurements_df, metric_name):
-        # Recompute full_network average, update dataset in S3
-        #new_measurements_df['full_network'] = new_measurements_df.drop(columns=['type','date','full_network']).mean(axis=1, numeric_only=True, skipna=True)
-        #new_measurements_df.loc[:, new_measurements_df.columns not in ['type','date','full_network']].mean()
-        # TODO: Ensure the columns in optimal order
-        columns = new_measurements_df.columns
-        #new_measurements_df = new_measurements_df[['type','date','full_network',*columns[2:-1]]]
-
-        # TODO: Ensure the date column is in datetime format?
-        # TODO: This approach might not work for weekly or seasonal, since those contain characters (even tho they use ISO 8601-2)
-        # merged_df['date'] = pd.to_datetime(merged_df['date'], utc=True, format='ISO8601', yearfirst=True, dayfirst=False)
+        # Merge latest data into existing dataframe, write as parquet file
+        log.info(f'Merging with existing {metric_name}.parquet file...')
 
         # Define custom categories for the "type" column, maintain this order
         custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
         new_measurements_df['type'] = pd.Categorical(new_measurements_df['type'], categories=custom_order, ordered=True)
         new_measurements_df['date'] = new_measurements_df['date'].astype('str')
-        #structured_df = pd.DataFrame(columns=['type','date','full_network',*columns[2:-1]])
 
         log.debug(new_measurements_df.info())
         log.debug(new_measurements_df)
 
-        # Merge with current dataset, or create a new one if it doesn't exist
-        df_path = f'{S3_BUCKET_NAME}/current/{metric_name}.parquet'
-        existing_df = self.read_file(path=df_path, file_format='parquet', binary=True)
-        if existing_df is not None:
-            log.info(f'Existing dataset located')
-            log.debug(existing_df)
-            log.info(f'Merging data now')
-            log.debug(new_measurements_df)
-            #merged_df = combine_dataset_rows(existing_df=existing_df, data_to_merge=new_measurements_df)
-            merged_df = merge_new_data(existing_df=existing_df, data_to_merge=new_measurements_df)
-            log.info(f'Resulting data merged')
-            log.debug(merged_df)
-            self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
-        else:
-            log.warn(f'No current dataset found - creating a new dataset from current metrics: {df_path} ')
-            self.write_file(path=df_path, contents=new_measurements_df, file_format='parquet', binary=True, overwrite=True)
+        # Always acquire lockfile to ensure no one is writing
+        while not self.lock():
+            log.warn('Waiting to acquire lockfile - retrying in 10s')
+            sleep(10)
 
+        try:
+            # Merge with current dataset, or create a new one if it doesn't exist
+            df_path = f'{S3_BUCKET_NAME}/current/{metric_name}.parquet'
+            existing_df = self.read_file(path=df_path, file_format='parquet', binary=True)
+            if existing_df is not None:
+                merged_df = merge_new_data(existing_df=existing_df, data_to_merge=new_measurements_df)
+                self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
+            else:
+                log.warn(f'No current dataset found - creating a new dataset from current metrics: {df_path} ')
+                self.write_file(path=df_path, contents=new_measurements_df, file_format='parquet', binary=True, overwrite=True)
+            log.info(f'Successfully updated {metric_name} dataset!')
+            log.debug(existing_df)
+
+        finally:
+            # Release lockfile when done writing
+            self.unlock()
 
 
     # Merged lat/lon coordinates into our list of known sensorIds
@@ -152,15 +147,31 @@ class S3API(object):
     #   - Overwrite this file in S3
     #   - Release the lock to end data writing
     def update_locations_df(self, new_locations_df):
+        # Always acquire lockfile to ensure no one is writing
+        while not self.lock():
+            log.warn('Waiting to acquire lockfile - retrying in 10s')
+            sleep(10)
+
         # Merge with current dataset, or create a new one if it doesn't exist
-        return self.merge_parquet_dataset(
-            df_path=f'{S3_BUCKET_NAME}/current/locations.parquet',
-            data_to_merge=new_locations_df,
-            drop_duplicates=True,
-            drop_na=True,
-            columns=['datasourceId','sourceId'],
-            sort_asc=True
-        )
+        columns = ['datasourceId','sourceId']
+        locations_df_path = f'{S3_BUCKET_NAME}/current/locations.parquet'
+        log.info(f'Merging new location details into {locations_df_path}...')
+
+        try:
+            existing_df = self.read_dataset(df_path=locations_df_path, columns=columns)
+            merged_df = new_locations_df.combine_first(existing_df)
+            merged_df.drop_duplicates(inplace=True, subset=columns)
+            merged_df.dropna(inplace=True, subset=columns, how='all')
+            merged_df = merged_df.set_index(columns).sort_values(by=columns, ascending=True).reset_index()
+            self.write_file(path=locations_df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
+            log.info('Successfully updated locations dataset!')
+            log.debug(merged_df)
+        except Exception as e:
+            log.error(f'Failed to merge with locations.parquet: {e}')
+            log.error(traceback.format_exc())
+        finally:
+            # Release lockfile when done writing
+            self.unlock()
 
 
     # Create a copy of the existing
@@ -215,65 +226,6 @@ class S3API(object):
         return existing_df
 
 
-    def merge_parquet_dataset(self, df_path, data_to_merge, columns, sort_asc: bool|list[bool]=True, drop_invalid=False, drop_duplicates=False, drop_na=False):
-        # Always acquire lockfile before writing
-        while not self.lock():
-            log.warn('Waiting to acquire lockfile - retrying in 10s')
-            sleep(10)
-
-        try:
-            existing_df = self.read_dataset(df_path=df_path, columns=columns)
-
-            log.debug(existing_df.info())
-            log.debug(existing_df)
-
-            # Merge new sensor readings into existing dataset
-            #merged_df = pd.merge(left=data_to_merge, right=existing_df, how='left')
-            #merged_df = pd.merge(left=merged_df, right=data_to_merge, how='left')
-            merged_df = pd.merge(left=existing_df, right=data_to_merge, how='outer')
-            merged_df = merged_df.combine_first(data_to_merge)
-
-            log.debug(merged_df.info())
-            log.debug(merged_df)
-
-            # Sort by type / date to place duplicates next to each other
-            # Group based on index, then take last value
-            #merged_df = merged_df.groupby(merged_df.index).last()
-
-            # Drop any rows where index columns are NaN or empty
-            if drop_invalid:
-                merged_df = merged_df[merged_df.index.notna()]
-
-            # Fill in any None values with NaN (for consistency)
-            #merged_df.fillna(value=np.nan)
-
-            # Drop duplicate index?
-            if drop_duplicates:
-                merged_df.drop_duplicates(inplace=True, subset=columns)
-
-            # Drop NaN / empty index?
-            if drop_na:
-                merged_df.dropna(inplace=True, subset=columns, how='all')
-
-            # Sort one last time by type (categorical order defined above) and date (newest to oldest)
-            merged_df.sort_values(inplace=True, by=columns, ascending=sort_asc)
-
-            log.debug(merged_df.info())
-            log.debug(merged_df)
-
-            log.debug(merged_df.loc[merged_df.isnull().any(axis=1)])
-
-            # Write to S3 if dataset has changed
-            self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
-            return merged_df
-        except Exception as e:
-            log.error(f'Failed to update Parquet dataset in S3: {e}')
-            log.error(traceback.format_exc())
-        finally:
-            # Release lockfile when done writing
-            self.unlock()
-
-
     # List all files and folders in an S3 directory
     def list_folders(self):
         return self.client.ls(path=f'{S3_BUCKET_NAME}/')
@@ -293,9 +245,7 @@ class S3API(object):
                 json.dumps(f)
             return self.client.stat(path)['size']
         if file_format == 'parquet':
-            log.debug(f'Converting dataframe to parquet format:')
-            log.debug(contents.info())
-            log.debug(contents)
+            log.debug(f'Converting dataframe to parquet format...')
 
             # Convert to a PyArrow Table (to preserve the schema)
             table = pa.Table.from_pandas(contents)
@@ -329,12 +279,7 @@ class S3API(object):
                 with self.client.open(path, mode) as f:
                     log.debug(f'Reading existing parquet file from S3: {path}')
                     table = pq.read_table(f, use_pandas_metadata=True)
-                    #log.debug('Parsed table:')
-                    #log.debug(table)
                     existing_dataset = table.to_pandas()
-                    log.debug('Parsed dataset:')
-                    log.debug(existing_dataset.info())
-                    log.debug(existing_dataset)
                     log.debug(f'Successfully read parquet file from S3: {path}')
             return existing_dataset
         elif file_format == 'raw':

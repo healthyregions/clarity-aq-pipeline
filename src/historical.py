@@ -81,9 +81,7 @@ class HistoricalMeasurements(ClarityAPI):
             historical_report_df = pd.concat([historical_report_df, historical_report_partial_df])
 
         # Gather datasourceId, sourceId -> latlong coords, merge with existing dataframe
-        log.debug('Gathering locations...')
         locations_df = self.gather_locations(measurements_df=historical_report_df)
-        log.debug(locations_df)
         self.s3api.update_locations_df(new_locations_df=locations_df)
 
         return historical_report_df, locations_df

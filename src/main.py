@@ -3,6 +3,7 @@ import logging
 import os
 import subprocess
 import sys
+import traceback
 
 import dateutil
 import pandas as pd
@@ -33,55 +34,6 @@ pd.options.future.infer_string = False
 def main(args):
     global HISTORICAL_START_TIME, HISTORICAL_END_TIME
     s3api = S3API()
-
-    if args.duck:
-        # Create two sample pandas DataFrames
-        daily = pd.DataFrame({
-            'type': ['day', 'day', 'day'],
-            'date': ['2026-01-01', '2026-01-02', '2026-01-03'],
-            'full_network': [91.6, 56.2, 93.5],
-            'sensorA': [12.1, 15.6, 61.2],
-            'sensorB': [81.3, 91.4, 21.7]
-        })
-        # print('init data (daily):')
-        # print(daily)
-
-        hourly = pd.DataFrame({
-            'type': ['hour', 'hour', 'hour'],
-            'date': ['2026-01-01 00:00:00', '2026-01-01 01:00:00', '2026-01-01 02:00:00'],
-            'full_network': [19.5, 65.6, 39.2],
-            'sensorB': [21.38, 51.51, 16.92],
-            'sensorC': [18.63, 19.12, 12.78],
-            'sensorG': [71.72, 17.27, 87.87],
-        })
-
-        # print('init data (hourly):')
-        # print(hourly)
-
-        second_hourly = pd.DataFrame({
-            'type': ['hour', 'hour', 'hour'],
-            'date': ['2026-01-01 00:00:00', '2026-01-01 01:00:00', '2026-01-01 02:00:00'],
-            'full_network': [16.9, 26.5, 23.9],
-            'sensorA': [21.38, 51.51, 16.92],
-            'sensorB': [38.21, 15.15, 29.16],
-            'sensorC': [18.63, 19.12, 12.78],
-            'sensorD': [36.81, 21.91, 78.21],
-            'sensorE': [63.18, 12.19, 21.87]
-        })
-        # print('new hourly data to merge:')
-        # print(second_hourly)
-
-        existing_df = combine_dataset_rows(daily, hourly)
-
-        print('merged data (daily + hourly):')
-        print(existing_df)
-        existing_df = merge_new_data(existing_df, second_hourly)
-
-        print('merged dataset for all sensors:')
-        print(existing_df.info())
-        print(existing_df)
-
-        sys.exit(0)
 
     if (args.startTime or args.endTime) and (args.weekly or args.monthly or args.weekly or args.yearly):
         log.error('Cannot use startTime or endTime with time-averaging. Specify either startTime/endTime OR --weekly / --monthly / --seasonal / --yearly')
@@ -177,11 +129,19 @@ def main(args):
                 'clarity_qa_qc.R',
                 '--historical' if args.historical else '--recent'
             ], universal_newlines=True, stderr=subprocess.PIPE)
-            print('Result:', output.strip())
-        except subprocess.CalledProcessError as e:
-            print('R script failed. Error:', e.stderr)
-        except FileNotFoundError:
-            print('Rscript not found.')
+            print(output.strip())
+        except subprocess.CalledProcessError as ex:
+            log.error('R script failed. Error:', ex.stderr)
+            traceback.print_exc()
+            sys.exit(500)
+        except FileNotFoundError as ex:
+            log.error('ERROR: Rscript not found.', ex)
+            traceback.print_exc()
+            sys.exit(404)
+        except Exception as ex:
+            log.error('ERROR: Rscript encountered an unknown exception: ', ex)
+            traceback.print_exc()
+            sys.exit(501)
 
         if not args.merge:
             log.warn('DRY RUN: --merge was not specified, so this will be treated as a dry run. Aborting.')
@@ -217,79 +177,61 @@ def main(args):
         daily['type'] = 'day'
 
         # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        # log.info(f'Compiling weekly sensor data...')
-        # weekly = pd.read_csv('data/summary-weekly.csv').rename(columns={
-        #     'n_valid_days': 'n_valid',
-        #     'is_valid_week': 'is_valid',
-        #     'week': 'date',
-        #     'weekly_mean_pm25': 'mean_pm25',
-        #     # .. define new metrics here, use consistent column names for hourly + daily ... #
-        # })
-        # weekly['type'] = 'week'
+        log.info(f'Compiling weekly sensor data...')
+        weekly = pd.read_csv('data/summary-weekly.csv').rename(columns={
+            'n_valid_days': 'n_valid',
+            'is_valid_week': 'is_valid',
+            'week': 'date',
+            'weekly_mean_pm25': 'mean_pm25',
+            # .. define new metrics here, use consistent column names for hourly + daily ... #
+        })
+        weekly['type'] = 'week'
 
         # Ensure date in the correct format - 2025-W10, 2025-W09, etc
-        # weekly['date'] = weekly['date'].map(lambda d: d.split('-')[0]+'-W'+d.split('-')[1][1:].zfill(2))
+        weekly['date'] = weekly['date'].map(lambda d: d.split('-')[0]+'-W'+d.split('-')[1][1:].zfill(2))
 
         # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        # log.info(f'Compiling monthly sensor data...')
-        # monthly = pd.read_csv('data/summary-monthly.csv').rename(columns={
-        #     'n_valid_days': 'n_valid',
-        #     'is_valid_month': 'is_valid',
-        #     'month': 'date',
-        #     'monthly_mean_pm25': 'mean_pm25',
-        #     # .. define new metrics here, use consistent column names for hourly + daily ... #
-        # })
-        # monthly['type'] = 'month'
+        log.info(f'Compiling monthly sensor data...')
+        monthly = pd.read_csv('data/summary-monthly.csv').rename(columns={
+            'n_valid_days': 'n_valid',
+            'is_valid_month': 'is_valid',
+            'month': 'date',
+            'monthly_mean_pm25': 'mean_pm25',
+            # .. define new metrics here, use consistent column names for hourly + daily ... #
+        })
+        monthly['type'] = 'month'
 
         # Ensure date in the correct format - 2025-10, 2025-09, etc
-        # monthly['date'] = monthly['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1].zfill(2))
+        monthly['date'] = monthly['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1].zfill(2))
 
 
         # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        # log.info(f'Compiling seasonal sensor data...')
-        # seasonal = pd.read_csv('data/summary-seasonal.csv').rename(columns={
-        #     'n_valid_days': 'n_valid',
-        #     'is_valid_season': 'is_valid',
-        #     'season': 'date',
-        #     'seasonal_mean_pm25': 'mean_pm25',
-        #     # .. define new metrics here, use consistent column names for hourly + daily ... #
-        # })
-        # seasonal['type'] = 'season'
+        log.info(f'Compiling seasonal sensor data...')
+        seasonal = pd.read_csv('data/summary-seasonal.csv').rename(columns={
+            'n_valid_days': 'n_valid',
+            'is_valid_season': 'is_valid',
+            'season': 'date',
+            'seasonal_mean_pm25': 'mean_pm25',
+            # .. define new metrics here, use consistent column names for hourly + daily ... #
+        })
+        seasonal['type'] = 'season'
 
         # Ensure date in the correct format - 2025-S03, 2025-S02, etc
-        #seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1][1:].zfill(2))
+        seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1][1:].zfill(2))
 
         # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        # log.info(f'Compiling yearly sensor data...')
-        # yearly = pd.read_csv('data/summary-yearly.csv').rename(columns={
-        #     'n_valid_days': 'n_valid',
-        #     'is_valid_season': 'is_valid',
-        #     'season': 'date',
-        #     'yearly_mean_pm25': 'mean_pm25',
-        #     # .. define new metrics here, use consistent column names for hourly + daily ... #
-        # })
-        # yearly['type'] = 'year'
+        log.info(f'Compiling yearly sensor data...')
+        yearly = pd.read_csv('data/summary-yearly.csv').rename(columns={
+            'n_valid_days': 'n_valid',
+            'is_valid_season': 'is_valid',
+            'season': 'date',
+            'yearly_mean_pm25': 'mean_pm25',
+            # .. define new metrics here, use consistent column names for hourly + daily ... #
+        })
+        yearly['type'] = 'year'
 
-        # TODO: Concat rows in R?
-        # merged_sensor_df = pd.read_csv('data/summary-combined.csv')
-
-        # Merge daily + hourly into a single pivoted dataframe
-        #merged_sensor_df = pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
-
-        # merged_sensor_df = combine_dataset_rows(yearly, seasonal)
-        # merged_sensor_df = combine_dataset_rows(merged_sensor_df, monthly)
-        # merged_sensor_df = combine_dataset_rows(merged_sensor_df, weekly)
-        # merged_sensor_df = combine_dataset_rows(merged_sensor_df, daily)
-        # merged_sensor_df = combine_dataset_rows(merged_sensor_df, hourly)
-        merged_sensor_df = combine_dataset_rows(daily, hourly)
-
-        # Define custom categories for the "type" column, maintain this order
-        custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
-        merged_sensor_df['type'] = pd.Categorical(merged_sensor_df['type'], categories=custom_order, ordered=True)
-        merged_sensor_df['date'] = merged_sensor_df['date'].astype('str')
-
-        log.debug(merged_sensor_df.info())
-        log.debug(merged_sensor_df)
+        # Concatenate all rows of different types into single dataframe
+        merged_sensor_df = pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
 
         # Repeat this process process each
         # TODO: Support other metrics?
@@ -297,16 +239,7 @@ def main(args):
             log.info(f'Pivoting data for {metric}.parquet')
             new_sensor_df = pd.pivot_table(data=merged_sensor_df, values=metric, index=['type', 'date'], columns=['datasourceId'], aggfunc='last', dropna=True)
             new_sensor_df = new_sensor_df.rename(columns={'datasourceId': ''}).reset_index()
-            new_sensor_df.sort_values(inplace=True, by=['type','date'], ascending=[True, False])
-            log.debug(new_sensor_df.info())
-            log.debug(new_sensor_df)
 
-            # full_network_mean_column = new_sensor_df.drop(columns=['type','date']).mean(axis=1, skipna=True, numeric_only=True)
-            # new_sensor_df.insert(0, 'full_network', full_network_mean_column)
-            # new_sensor_df = new_sensor_df[['type', 'date', 'full_network', *new_sensor_df.columns.tolist()[2:-1]]]
-
-            # Merge latest data into existing dataframe, write as parquet file
-            log.info(f'Merging with existing {metric}.parquet file...')
             s3api.update_measurements_df(
                 metric_name=metric,
                 new_measurements_df=new_sensor_df,
@@ -345,10 +278,9 @@ if __name__ == '__main__':
     # Admin / Debug commands
     parser.add_argument('-b', '--backup', action='store_true',
                         help="Backup existing parquet files in S3")
-    parser.add_argument('-d', '--duck', action='store_true',
-                        help="Test DuckDB connection")
 
-    # Time-averaging function - shorthand functions for processes that run once per week / month / season / year
+    # Time-averaging functions - shorthand functions for processes that run once per week / month / season / year
+    # For our purposes, a season is defined 3 months of the year
     parser.add_argument('--weekly', action='store_true',
                         help="Calculate weekly average based on previous 7 days (assumes it is currently Monday)")
     parser.add_argument('--monthly', action='store_true',

@@ -193,17 +193,6 @@ def redact(redactable: any, key_name: str = '', limit = 20):
         raise TypeError(f'ERROR: unrecognized type - {type(redactable).__name__}')
 
 
-def merge_locations(existing_df, data_to_merge):
-    # Connect to an in-memory DuckDB database
-    with duckdb.connect(database=':memory:') as con:
-        con.execute("""
-            CREATE OR REPLACE TABLE combined_locations AS
-            SELECT (datasourceId, sourceId, locationLatitude, locationLongitude) FROM existing_df
-            UNION ALL BY NAME
-            SELECT (datasourceId, sourceId, locationLatitude, locationLongitude) FROM data_to_merge
-        """)
-        return con.execute("SELECT * FROM combined_locations").fetchdf()
-
 def combine_dataset_rows(existing_df, data_to_merge):
     # Connect to an in-memory DuckDB database
     with duckdb.connect(database=':memory:') as con:
@@ -217,40 +206,15 @@ def combine_dataset_rows(existing_df, data_to_merge):
         return con.execute("SELECT * FROM combined_metrics").fetchdf()
 
 
-def untested_merge_new_data(existing_df, data_to_merge):
-    # Connect to an in-memory DuckDB database
-    with duckdb.connect(database=':memory:') as con:
-        return con.execute("""
-            CREATE TABLE combined_metrics AS
-                SELECT * FROM existing_df;
-            MERGE INTO combined_metrics AS t
-            USING data_to_merge AS s
-            ON (t.type = s.type AND t.date = s.date)
-            WHEN MATCHED THEN UPDATE
-            WHEN NOT MATCHED THEN INSERT;
-        """).fetchdf()
 
 def merge_new_data(existing_df, data_to_merge):
-
-
-    # Upsert using MERGE INTO
-    # The DataFrame 'second_hourly' is automatically recognized as a source table
-    # con.execute("""
-    #     MERGE INTO combined_metrics AS t
-    #     USING second_hourly AS s
-    #     ON (t.type = s.type AND t.date = s.date)
-    #     WHEN MATCHED THEN UPDATE
-    #     WHEN NOT MATCHED THEN INSERT;
-    # """)
-
     # Determine UNION of columns
     left_columns = [col for col in existing_df.columns.tolist() if col not in ['type','date']]
     right_columns = [col for col in data_to_merge.columns.tolist() if col not in ['type','date']]
 
+    # Convert to set for uniqueness
     all_sensor_ids = list(set(left_columns + right_columns))
     all_sensor_ids.sort()
-    print('Unique sensor IDs:')
-    print(truncate(all_sensor_ids))
 
     # Loop over columns to build up our clauses
     # Coalesce all column values where possible
@@ -259,63 +223,28 @@ def merge_new_data(existing_df, data_to_merge):
     for id in all_sensor_ids:
         if id in left_columns and id in right_columns:
             sensor_col_names += f"COALESCE(r.{id}, l.{id}), "
-            #coalesce_columns_clause += f"{id} = COALESCE(r.{id}, l.{id}), "
             coalesce_columns_clause += f"{id} = COALESCE(s.{id}, t.{id}), "
         if id in left_columns and id not in right_columns:
             sensor_col_names += f"l.{id}, "
-            #coalesce_columns_clause += f"{id} = l.{id}, "
             coalesce_columns_clause += f"{id} = t.{id}, "
         if id not in left_columns and id in right_columns:
             sensor_col_names += f"r.{id}, "
-            #coalesce_columns_clause += f"{id} = r.{id}, "
             coalesce_columns_clause += f"{id} = s.{id}, "
 
-    #print('Generated SQL:')
-    #print(sql_statement)
+    # Patch existing data with new data; returns union of both
+    keys = ['type', 'date']
+    existing_df = existing_df.set_index(keys)
+    data_to_merge = data_to_merge.set_index(keys)
+    merged_df = data_to_merge.combine_first(existing_df).reset_index()
 
-    # Connect to an in-memory DuckDB database
-    with duckdb.connect(database=':memory:') as con:
-        # list_avg([{sensor_col_names}]) AS full_network,
-        # merged_df = con.execute(f"""
-        #     SELECT l.type, l.date,
-        #            {coalesce_columns_clause}
-        #            FROM existing_df AS l
-        #            FULL OUTER JOIN data_to_merge AS r ON l.type = r.type and l.date = r.date;
-        # """).fetchdf()
+    # Define custom categories for the "type" column, maintain this order
+    custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
+    merged_df['type'] = pd.Categorical(merged_df['type'], categories=custom_order, ordered=True)
+    merged_df['date'] = merged_df['date'].astype('str')
 
-        # merged_df = con.execute(f"""
-        #     CREATE TABLE combined_metrics AS
-        #         SELECT * FROM existing_df;
-        #     MERGE INTO combined_metrics AS t
-        #     USING data_to_merge AS s
-        #     ON (t.type = s.type AND t.date = s.date)
-        #     WHEN MATCHED THEN
-        #         UPDATE SET
-        #             {coalesce_columns_clause}
-        #     WHEN NOT MATCHED THEN
-        #         INSERT;
-        # """).fetchdf()
-
-        keys = ['type', 'date']
-        existing_df = existing_df.set_index(keys)
-        data_to_merge = data_to_merge.set_index(keys)
-
-        # Patch existing with new; returns union of both
-        merged_df = data_to_merge.combine_first(existing_df).reset_index()
-
-        print(merged_df.info())
-        print(merged_df)
-
-        # Define custom categories for the "type" column, maintain this order
-        custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
-        merged_df['type'] = pd.Categorical(merged_df['type'], categories=custom_order, ordered=True)
-        merged_df['date'] = merged_df['date'].astype('str')
-
-        # Sort by type, then reverse sort by date for optimal retrieval of latest metrics
-        merged_df.sort_values(by=['type','date'], ascending=[True, False], inplace=True)
-        # Count NaNs in each column
-        print(merged_df.isna())
-        return merged_df
+    # Sort by type, then reverse sort by date for optimal retrieval of latest metrics
+    merged_df.sort_values(by=['type','date'], ascending=[True, False], inplace=True)
+    return merged_df
 
 
 def calculate_average(existing_df, start_date, end_date):

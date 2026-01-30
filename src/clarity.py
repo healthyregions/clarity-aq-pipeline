@@ -1,6 +1,7 @@
 from io import StringIO
 
 import pandas as pd
+import requests
 from requests import RequestException, Response
 import sys
 
@@ -25,6 +26,7 @@ class ClarityAPI(object):
         self.measurementsUrl = f'{CLARITY_HOSTNAME}/recent-datasource-measurements-query'
         self.continuationUrl = f'{CLARITY_HOSTNAME}/recent-datasource-measurements-continuation'
         self.historicalUrl = f'{CLARITY_HOSTNAME}/report-requests'
+        self.datasourcesUrl = f'{CLARITY_HOSTNAME}/datasources'
         self.reportsUrl = CLARITY_HOSTNAME + '/report-request/{report_id}'  # /{report_id} must be appended
         self.headers = {
           'Content-Type': 'application/json',
@@ -33,11 +35,35 @@ class ClarityAPI(object):
           'x-api-key': CLARITY_API_KEY
         }
 
+    def gather_datasources(self):
+        try:
+            log.info('Gathering datasources...')
+            response = requests.get(self.datasourcesUrl, { 'org': self.orgName }, headers=self.headers).json()
+            return response['datasources']
+        except requests.exceptions.ConnectionError as ex:
+            self.log_exception(ex, 'Connection Error: Could not connect to the server')
+            sys.exit(3)
+        except requests.exceptions.Timeout as ex:
+            self.log_exception(ex, 'Timeout Error: The request timed out')
+            sys.exit(4)
+        except requests.exceptions.HTTPError as ex:
+            self.log_exception(ex, 'HTTP Error: A bad HTTP status code was received')
+            sys.exit(5)
+        except requests.exceptions.RequestException as ex:
+            self.log_exception(ex, 'An unexpected Requests error occurred')
+            sys.exit(6)
+        except Exception as ex:
+            self.log_exception(ex, 'An unexpected Requests error occurred')
+            sys.exit(10)
 
-    def log_exception(self, ex: RequestException, message: str):
+
+    def log_exception(self, ex: RequestException|Exception, message: str):
         log.error(f'{message}. Details: {ex}')
         try:
-            log.error(ex.response.text)
+            if isinstance(ex, RequestException):
+                log.error(ex.response.text)
+            else:
+                log.error(ex)
         except Exception as ex2:
             log.fatal(f'FATAL: {str(ex2)}')
             log.fatal('Encountered a failure while logging response error. Shutting down....')
@@ -45,11 +71,28 @@ class ClarityAPI(object):
 
 
     def gather_locations(self, measurements_df):
-        location_df_columns = ['datasourceId', 'sourceId', 'locationLatitude', 'locationLongitude']
-        return measurements_df[location_df_columns] \
+        log.info('Gathering locations...')
+        locations_df_columns = ['datasourceId', 'sourceId', 'sourceType', 'locationLatitude', 'locationLongitude']
+        locations_df = measurements_df[locations_df_columns] \
                 .drop_duplicates(subset=['datasourceId', 'sourceId']) \
                 .round(decimals=4)
 
+        # TODO: datasources.orgAnnotations.name
+        datasources = self.gather_datasources()
+        #datasources_df = pd.DataFrame(datasources)[['datasourceId', 'currentSourceId', 'sourceType']]
+        datasources_df = pd.json_normalize(datasources).rename(columns={
+            'orgAnnotations.name': 'name',
+            'orgAnnotations.group': 'group',
+            'orgAnnotations.tags': 'tags',
+        })
+
+        # Zip up locations + datasources using datasourceID as key, flatten + include org annotations (name/group/tags)
+        subset_columns = ['datasourceId', 'currentSubscriptionId', 'currentSourceId', 'name', 'group', 'tags']
+        locations_df = pd.merge(locations_df, datasources_df[subset_columns], on='datasourceId', how='left')
+        log.info('Merged locations + datasources! Writing result to S3...')
+
+        sorted_df = locations_df.set_index(['datasourceId', 'sourceId']).sort_values(axis='rows', by=['datasourceId', 'sourceId']).reset_index()
+        return sorted_df[['datasourceId', 'sourceId', 'currentSourceId', 'sourceType', 'locationLatitude', 'locationLongitude', 'name', 'group', 'tags']]
 
 
     # Parse csv-wide Response and return CSV contents as a pandas Dataframe

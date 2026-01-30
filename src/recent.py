@@ -55,10 +55,7 @@ class RecentMeasurements(ClarityAPI):
         try:
             r = self.recent_post_measurements_query(start_time=start_time)
             recent_measurements_df = self.parse_results_csv_wide(r=r)
-            log.debug('Gathering locations...')
             locations_df = self.gather_locations(measurements_df=recent_measurements_df)
-
-            log.debug(locations_df)
             self.s3api.update_locations_df(new_locations_df=locations_df)
 
             token = r.headers.get('x-clarity-continuation-token', None)
