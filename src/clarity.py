@@ -14,6 +14,12 @@ class ClarityAPI(object):
     def __init__(self, s3api: S3API):
         self.s3api = s3api
 
+        # Current R data cleanup script expects the following:
+        #    - pm2_5ConcMassIndividual
+        #    - relHumidInternalIndividual
+        #    - temperatureInternalIndividual
+        self.metricSelect = 'only + :pm25 + :internal'
+
         # Endpoint URLs / default headers for Clarity's API
         self.orgName = CLARITY_ORG_NAME
         self.measurementsUrl = f'{CLARITY_HOSTNAME}/recent-datasource-measurements-query'

@@ -10,21 +10,22 @@ from config import log, CLARITY_REPORT_ID
 from utils import redact
 
 
-# globals: S3_BUCKET_NAME, CLARITY_API_KEY, CLARITY_ORG_NAME, CONTINUATION_TOKEN_OUTPUT_PATH, s3_client
+# globals: S3_BUCKET_NAME, CLARITY_API_KEY, CLARITY_ORG_NAME, s3_client
 # NOTE: Historical measurements do not support continuation tokens
 class HistoricalMeasurements(ClarityAPI):
 
     # Fetch per-minute metrics from the previous month in JSON format
     def historical_fetch_metrics(self, start_time, end_time):
+        # NOTE: Historical measurements don't support locationRounding or continuationToken
         body: dict = {
             'org': self.orgName,
             'allDatasources': True,
             'outputFrequency': 'minute',
-            'locationRounding': 4,
             'report': 'datasource-measurements',
             'format': 'csv-wide',
             'startTime': start_time,
             'endTime': end_time,
+            'metricSelect': self.metricSelect,
             'qcAssessment': True,
             'qcFlags': True,
         }
@@ -96,7 +97,6 @@ class HistoricalMeasurements(ClarityAPI):
 
     def historical_post_report_request(self, body: dict):
         # format: {"reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing", "report": "datasource-measurements", "urls": [], "query": {"datasourceIds": ["DZFUM1742", "DRJLK4822", ,,, ], "endTime": "2025-11-01T00:00:00.000Z", "outputFrequency": "minute", "startTime": "2025-10-01T00:00:00.000Z", "format": "csv-wide", "metricLabelStyle": "canonical", "qcAssessment": true, "qcFlags": true}}
-        redacted = redact(redactable=body, key_name='continuationToken')
         log.info(f'Submitting query: {redacted}')
         r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
         r.raise_for_status()

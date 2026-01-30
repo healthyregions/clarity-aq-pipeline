@@ -11,19 +11,19 @@ from utils import redact
 class RecentMeasurements(ClarityAPI):
 
     def recent_post_measurements_query(self, start_time):
-        body: dict = { 'org': self.orgName }
-
         token = self.read_continuation_token()
-        if CLARITY_USE_CONTINUATION_TOKEN and token:
-            body['continuationToken'] = token
-        else:
-            body['allDatasources'] = True
-            body['replyWithContinuationToken'] = CLARITY_USE_CONTINUATION_TOKEN
-            body['outputFrequency'] = 'minute'
-            body['locationRounding'] = 4
-            body['format'] = 'csv-wide'
-            if start_time:
-                body['startTime'] = start_time
+        body: dict = { 'org': self.orgName, 'continuationToken': token } \
+            if CLARITY_USE_CONTINUATION_TOKEN and token else \
+            {
+                'org': self.orgName,
+                'allDatasources': True,
+                'replyWithContinuationToken': CLARITY_USE_CONTINUATION_TOKEN,
+                'outputFrequency': 'minute',
+                'locationRounding': 4,
+                'format': 'csv-wide',
+                'startTime': start_time if start_time else None,
+                'metricSelect': self.metricSelect,
+            }
 
         url = self.continuationUrl if token else self.measurementsUrl
         redacted = redact(redactable=body, key_name='continuationToken')

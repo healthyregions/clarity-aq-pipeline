@@ -371,10 +371,22 @@ df_monthly <- monthly #%>% filter(is_valid)
 
 
 # Seasonal aggregation data using only valid days
-# Date Format:  2026-S1, 2026-S2, etc
+# Date Format:  2026-summer, 2026-spring, etc
 seasonal <- df_daily %>%
-  mutate(date = paste(lubridate::year(date), case_match(month(floor_date(date, "season")), 3 ~ "S01", 6 ~ "S02", 9 ~ "S03", 12 ~ "S04"), sep = "-")) %>%
-  group_by(datasourceId, sourceId, date) %>%
+  mutate(date = case_match(month(floor_date(date, "month")),
+     1 ~ paste(lubridate::year(date), "winter", sep = "-"),
+     2 ~ paste(lubridate::year(date), "winter", sep = "-"),
+     3 ~ paste(lubridate::year(date), "spring", sep = "-"),
+     4 ~ paste(lubridate::year(date), "spring", sep = "-"),
+     5 ~ paste(lubridate::year(date), "spring", sep = "-"),
+     6 ~ paste(lubridate::year(date), "summer", sep = "-"),
+     7 ~ paste(lubridate::year(date), "summer", sep = "-"),
+     8 ~ paste(lubridate::year(date), "summer", sep = "-"),
+     9 ~ paste(lubridate::year(date), "autumn", sep = "-"),
+     10 ~ paste(lubridate::year(date), "autumn", sep = "-"),
+     11 ~ paste(lubridate::year(date), "autumn", sep = "-"),
+     12 ~ paste(lubridate::year(date)+1, "winter", sep = "-"))
+  ) %>% group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = n(),                     # Count of valid days
     type = "season",
@@ -408,14 +420,7 @@ df_yearly <- yearly #%>% filter(is_valid)
 #cat("Valid yearly rows (>220 valid days): ", nrow(df_yearly), "\n")
 
 
-if (log_level == 'debug') {
-    print(df_hourly)
-    print(df_daily)
-    print(df_weekly)
-    print(df_monthly)
-    print(df_seasonal)
-    print(df_yearly)
-}
+
 # df_citywide_hourly <- df_hourly %>%
 #     #filter(is_valid_hour) %>%
 #     group_by(hour) %>%
@@ -468,13 +473,39 @@ summary_weekly_file <- paste(raw_minute_output_dir, "summary-weekly.", output_fo
 summary_monthly_file <- paste(raw_minute_output_dir, "summary-monthly.", output_format, sep = "")
 summary_seasonal_file <- paste(raw_minute_output_dir, "summary-seasonal.", output_format, sep = "")
 summary_yearly_file <- paste(raw_minute_output_dir, "summary-yearly.", output_format, sep = "")
+summary_combined_file <- paste(raw_minute_output_dir, "summary-combined.", output_format, sep = "")
 
-df_hourly_final <- df_hourly  # %>% mutate(type = "hour")
-df_daily_final <- df_daily    # %>% mutate(type = "day")
-df_weekly_final <- df_weekly  # %>% mutate(type = "week")
-df_monthly_final <- df_monthly  # %>% mutate(type = "month")
-df_seasonal_final <- df_seasonal  # %>% mutate(type = "season")
-df_yearly_final <- df_yearly  # %>% mutate(type = "year")
+# Inject "type" column
+df_hourly_final <- df_hourly %>% filter(is_valid) %>% mutate(type = "hour")
+df_daily_final <- df_daily %>% filter(is_valid) %>% mutate(type = "day")
+df_weekly_final <- df_weekly %>% filter(is_valid) %>% mutate(type = "week")
+df_monthly_final <- df_monthly %>% filter(is_valid) %>% mutate(type = "month")
+df_seasonal_final <- df_seasonal %>% filter(is_valid) %>% mutate(type = "season")
+df_yearly_final <- df_yearly %>% filter(is_valid) %>% mutate(type = "year")
+
+# Merge all rows into a single dataframe
+df_combined_final <- rbind(df_yearly, df_seasonal)
+df_combined_final <- rbind(df_combined_final, df_monthly_final)
+df_combined_final <- rbind(df_combined_final, df_weekly_final)
+df_combined_final <- rbind(df_combined_final, df_daily_final)
+df_combined_final <- rbind(df_combined_final, df_hourly_final)
+
+# Sort by type (custom order), then by date (desc)
+#custom_order <- c("year", "season", "month", "week", "daily", "hour")
+#df_combined_final$type <- factor(df_combined_final$type, ordered = TRUE, levels = custom_order)
+#df_combined_final <- df_combined_final %>%
+#  arrange(type, date)
+#print(df_combined_final)
+
+if (log_level == 'debug') {
+    print(df_hourly_final)
+    print(df_daily_final)
+    print(df_weekly_final)
+    print(df_monthly_final)
+    print(df_seasonal_final)
+    print(df_yearly_final)
+}
+
 
 # Write the chosen format to disk
 cat("Writing as OUTPUT_FORMAT=", output_format, " format...\n", sep = "")
@@ -486,6 +517,7 @@ if (output_format == "parquet") {
     write_parquet(x = df_monthly_final, sink = summary_monthly_file)
     write_parquet(x = df_seasonal_final, sink = summary_seasonal_file)
     write_parquet(x = df_yearly_final, sink = summary_yearly_file)
+    write_parquet(x = df_combined_final, sink = summary_combined_file)
 } else if (output_format == "csv") {
     write.csv(sensor_hourly_comp, summary_completeness_file, row.names = FALSE)
     write.csv(df_hourly_final, summery_hourly_file, row.names = FALSE)
@@ -494,6 +526,7 @@ if (output_format == "parquet") {
     write.csv(df_monthly_final, summary_monthly_file, row.names = FALSE)
     write.csv(df_seasonal_final, summary_seasonal_file, row.names = FALSE)
     write.csv(df_yearly_final, summary_yearly_file, row.names = FALSE)
+    write.csv(df_combined_final, summary_combined_file, row.names = FALSE)
 } else if (output_format == "json") {
     jsonlite::write_json(sensor_hourly_comp, summary_completeness_file, pretty = FALSE)
     jsonlite::write_json(df_hourly_final, summery_hourly_file, pretty = FALSE)
@@ -502,6 +535,7 @@ if (output_format == "parquet") {
     jsonlite::write_json(df_monthly_final, summary_monthly_file, pretty = FALSE)
     jsonlite::write_json(df_seasonal_final, summary_seasonal_file, pretty = FALSE)
     jsonlite::write_json(df_yearly_final, summary_yearly_file, pretty = FALSE)
+    jsonlite::write_json(df_combined_final, summary_combined_file, pretty = FALSE)
 } else {
     cat("Skipping writing unknown file format: \"", output_format, "\"\n", sep = "")
 }

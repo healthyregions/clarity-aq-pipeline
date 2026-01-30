@@ -13,6 +13,14 @@ import traceback
 from config import log, IS_MINIO, S3_ENDPOINT_URL, S3_ACCESS_KEY, S3_SECRET_KEY
 from config import S3_REGION, S3_STORAGE_CLASS, S3_BUCKET_NAME
 
+import duckdb
+
+from utils import merge_new_data, merge_locations, combine_dataset_rows
+
+# Connect to an in-memory DuckDB database
+con = duckdb.connect(database=':memory:')
+
+
 
 # globals: S3_ENDPOINT_URL, IS_MINIO, S3_REGION, s3_client
 class S3API(object):
@@ -58,7 +66,7 @@ class S3API(object):
     # And don't forget to call unlock when you're done! :)
     def lock(self, wait=False):
         # Check if lockfile exists
-        log.debug('Acquiring lockfile')
+        log.debug('Acquiring lockfile...')
         lockfile_path = f'{S3_BUCKET_NAME}/.lock'
         lockfile = self.read_file(path=lockfile_path, file_format='raw')
         if lockfile and not wait:
@@ -79,7 +87,7 @@ class S3API(object):
     # If this is not called, other processes will be blocked from writing to the dataset
     def unlock(self):
         # Check if lockfile exists
-        log.debug('Releasing lockfile')
+        log.debug('Releasing lockfile...')
         lockfile_path = f'{S3_BUCKET_NAME}/.lock'
         lockfile = self.read_file(path=lockfile_path, file_format='raw')
         if not lockfile:
@@ -99,14 +107,12 @@ class S3API(object):
     #   - Overwrite this file in S3
     #   - Release the lock to end data writing
     def update_measurements_df(self, new_measurements_df, metric_name):
-        log.debug(new_measurements_df.info())
-
         # Recompute full_network average, update dataset in S3
-        new_measurements_df['full_network'] = new_measurements_df.drop(columns=['type','date','full_network']).mean(axis=1, numeric_only=True, skipna=True)
+        #new_measurements_df['full_network'] = new_measurements_df.drop(columns=['type','date','full_network']).mean(axis=1, numeric_only=True, skipna=True)
         #new_measurements_df.loc[:, new_measurements_df.columns not in ['type','date','full_network']].mean()
         # TODO: Ensure the columns in optimal order
         columns = new_measurements_df.columns
-        new_measurements_df = new_measurements_df[['type','date','full_network',*columns[2:-1]]]
+        #new_measurements_df = new_measurements_df[['type','date','full_network',*columns[2:-1]]]
 
         # TODO: Ensure the date column is in datetime format?
         # TODO: This approach might not work for weekly or seasonal, since those contain characters (even tho they use ISO 8601-2)
@@ -116,18 +122,28 @@ class S3API(object):
         custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
         new_measurements_df['type'] = pd.Categorical(new_measurements_df['type'], categories=custom_order, ordered=True)
         new_measurements_df['date'] = new_measurements_df['date'].astype('str')
-
         #structured_df = pd.DataFrame(columns=['type','date','full_network',*columns[2:-1]])
 
         log.debug(new_measurements_df.info())
+        log.debug(new_measurements_df)
 
         # Merge with current dataset, or create a new one if it doesn't exist
-        return self.merge_parquet_dataset(
-            df_path=f'{S3_BUCKET_NAME}/current/{metric_name}.parquet',
-            data_to_merge=new_measurements_df,
-            columns=['type', 'date'],
-            sort_asc=[True, False],
-        )
+        df_path = f'{S3_BUCKET_NAME}/current/{metric_name}.parquet'
+        existing_df = self.read_file(path=df_path, file_format='parquet', binary=True)
+        if existing_df is not None:
+            log.info(f'Existing dataset located')
+            log.debug(existing_df)
+            log.info(f'Merging data now')
+            log.debug(new_measurements_df)
+            #merged_df = combine_dataset_rows(existing_df=existing_df, data_to_merge=new_measurements_df)
+            merged_df = merge_new_data(existing_df=existing_df, data_to_merge=new_measurements_df)
+            log.info(f'Resulting data merged')
+            log.debug(merged_df)
+            self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
+        else:
+            log.warn(f'No current dataset found - creating a new dataset from current metrics: {df_path} ')
+            self.write_file(path=df_path, contents=new_measurements_df, file_format='parquet', binary=True, overwrite=True)
+
 
 
     # Merged lat/lon coordinates into our list of known sensorIds
@@ -143,7 +159,6 @@ class S3API(object):
             drop_duplicates=True,
             drop_na=True,
             columns=['datasourceId','sourceId'],
-            sort=True,
             sort_asc=True
         )
 
@@ -196,17 +211,11 @@ class S3API(object):
         if existing_df is None:
             log.warn(f'No current dataset found - creating a new / empty dataset:{df_path} ')
             existing_df = pd.DataFrame(columns=columns)
-            if 'date' in columns:
-                existing_df['date'] = existing_df['date'].astype('str')
-            if 'type' in columns:
-                custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
-                existing_df['type'] = pd.Categorical(existing_df['type'], categories=custom_order,
-                                                             ordered=True)
 
         return existing_df
 
 
-    def merge_parquet_dataset(self, df_path, data_to_merge, columns, sort=False, sort_asc: bool|list[bool]=True, drop_invalid=False, drop_duplicates=False, drop_na=False):
+    def merge_parquet_dataset(self, df_path, data_to_merge, columns, sort_asc: bool|list[bool]=True, drop_invalid=False, drop_duplicates=False, drop_na=False):
         # Always acquire lockfile before writing
         while not self.lock():
             log.warn('Waiting to acquire lockfile - retrying in 10s')
@@ -219,9 +228,9 @@ class S3API(object):
             log.debug(existing_df)
 
             # Merge new sensor readings into existing dataset
-            merged_df = pd.merge(left=data_to_merge, right=existing_df, how='left')
-            merged_df = pd.merge(left=merged_df, right=data_to_merge, how='left')
-            merged_df = merged_df.combine_first(existing_df)
+            #merged_df = pd.merge(left=data_to_merge, right=existing_df, how='left')
+            #merged_df = pd.merge(left=merged_df, right=data_to_merge, how='left')
+            merged_df = pd.merge(left=existing_df, right=data_to_merge, how='outer')
             merged_df = merged_df.combine_first(data_to_merge)
 
             log.debug(merged_df.info())
@@ -284,6 +293,7 @@ class S3API(object):
                 json.dumps(f)
             return self.client.stat(path)['size']
         if file_format == 'parquet':
+            log.debug(f'Converting dataframe to parquet format:')
             log.debug(contents.info())
             log.debug(contents)
 
