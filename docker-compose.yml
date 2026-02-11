@@ -4,11 +4,11 @@ volumes:
 services:
   minio:
     image: minio/minio:latest
+    container_name: clarity-minio
     ports:
       - "9000:9000" # S3 API port
       - "9001:9001" # MinIO Console port
     command: server --console-address ":9001" /data
-    profiles: ["minio"]
     env_file:
       - .env
     volumes:
@@ -20,64 +20,54 @@ services:
       retries: 3
 
 
-  createbuckets:
-    image: minio/mc
+  minio-ensure-bucket-exists:
+    image: minio/mc:latest
     env_file:
       - .env
     network_mode: host
-    profiles: ["minio"]
     entrypoint: >
       /bin/sh -c "
       echo creating ${S3_BUCKET_NAME} on ${S3_ENDPOINT_URL}...;
       /usr/bin/mc alias set myminio ${S3_ENDPOINT_URL} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
       /usr/bin/mc mb myminio/${S3_BUCKET_NAME};
-      /usr/bin/mc policy set public myminio/${S3_BUCKET_NAME};
       exit 0;
       "
     depends_on:
       minio:
         condition: service_healthy
 
-  clarityfetch:
+
+      #/usr/bin/mc policy set public myminio/${S3_BUCKET_NAME};
+  minio-ensure-public-download:
+    image: minio/mc:latest
+    env_file:
+      - .env
+    network_mode: host
+    entrypoint: >
+      /bin/sh -c "
+      echo setting policy for ${S3_BUCKET_NAME} on ${S3_ENDPOINT_URL}...;
+      /usr/bin/mc alias set myminio ${S3_ENDPOINT_URL} ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD};
+      /usr/bin/mc anonymous set download myminio/${S3_BUCKET_NAME};
+      exit 0;
+      "
+    depends_on:
+      minio:
+        condition: service_healthy
+      minio-ensure-bucket-exists:
+        condition: service_completed_successfully
+
+  aq:
     image: ghcr.io/healthyregions/clarity-aq-pipeline
+    container_name: clarity-aq
     env_file:
       - .env
     build:
       context: .
-    profiles: ["pipeline"]
-    command: ['--fetch']
     network_mode: host
+    profiles: ["none"]
     volumes:
-      - ./data:/usr/app/data/
+      - ./data:/home/rstudio/data/
+    command: >
+      python ./src/main.py --recent --fetch --clean --merge
 
 
-#  datacleanup:
-#    image: herop/claritydatacleanup
-#    working_dir: /home/rstudio
-#    build:
-#      context: .
-#      dockerfile: Dockerfile.r
-#    volumes:
-#      - ./data:/usr/app/data/
-#    profiles: ["pipeline"]
-#    #depends_on:
-#    #  clarityfetch:
-#    #    condition: service_completed_successfully
-
-
-  s3push:
-    image: ghcr.io/healthyregions/clarity-aq-pipeline
-    env_file:
-      - .env
-    build:
-      context: .
-    command: ['--push']
-    network_mode: host
-    volumes:
-      - ./data:/usr/app/data/
-    profiles: ["pipeline"]
-    #depends_on:
-    #  clarityfetch:
-    #    condition: service_completed_successfully
-    #  datacleanup:
-    #    condition: service_completed_successfully

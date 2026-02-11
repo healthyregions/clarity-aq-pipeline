@@ -1,7 +1,10 @@
 # This workflow will fetch air quality sensor data from the Clarity REST API v2,
-# run cleanup operations on this data, and then push it into an S3 bucket
+# run cleanup operations on this data, and then merge it into a running Parquet dataset
+# in our S3 bucket
 
-name: data-cleanup
+# Once per day, this will fetch Historical Measurements (per-minute data) for the previous full day
+
+name: daily
 
 # Controls when the workflow will run
 on:
@@ -15,8 +18,8 @@ on:
   #            │ │ │ │ │
   #            * * * * *
   schedule:
-    # Run once per hour at ~ 5 minutes after the hour
-    - cron: "5 * * * *"
+    # Run once per hour at ~ 5 minutes before the hour
+    - cron: "30 1 * * *"
     
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -47,23 +50,7 @@ jobs:
       - name: Create base parameters
         run: cp .env.example .env
 
-
       # Fetch Clarity API data and save raw files locally
-      - name: Fetch Clarity sensor data and save as CSV
-        run: docker compose run --remove-orphans -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} clarityfetch
-
-
-      # Run data cleanup, QA/QI, postprocessing, etc to produce /usr/app/cleaned.csv
-      # Currently saved as intermediary CSV within container: /usr/app/raw.csv
-      # TODO: decide which metrics are important to preserve/display - UIC to produce these R scripts
-      # TODO: Run secondary container for R script(s), mount/read /usr/app/raw.csv
-      # TODO: Alternatively, run Rscript from Python (instead of secondary image?)
-      #- name: Build datacleanup image (R? Run data cleanup / postprocessing on Clarity CSV data)
-      #  run: docker compose run --remove-orphans --build datacleanup
-
-
-      # Upload cleaned output files to S3
-      - name: Build + run s3push image (Upload cleaned output files to S3)
-        run: docker compose run --remove-orphans -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} s3push
-
+      - name: Fetch Clarity sensor data, clean CSV data, merge into Parquet dataset
+        run: docker compose run --remove-orphans -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} aq --historical --fetch --merge --clean --daily
 

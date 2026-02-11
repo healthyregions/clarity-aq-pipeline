@@ -1,14 +1,258 @@
 import json
 from decimal import Decimal
 
+# timedelta for microseconds/days/hours, relativedelta for months/years
+from datetime import datetime, UTC, timedelta
+from dateutil.relativedelta import relativedelta
+
+import duckdb
 import pandas as pd
-from pandas import DataFrame, value_counts
+from pandas import DataFrame
 from pathlib import Path
 
+# For Pandas > 3.0.0, DType==string is not yet well-supported
+pd.options.future.infer_string = False
 
-# Shorthand helper functon for setting or defaulting a variable value
-def set_or_default(value, default):
-    return value if value else default
+def isoformat(dt):
+    return dt.strftime('%Y-%m-%dT%H:%M:%S.000Z')
+
+# Use now's date to find start hour 3+ hours ago and the end of the current hour
+#   Used for --recent
+def get_current_3_hours_dates():
+    start_of_current_hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    end_of_previous_hour = start_of_current_hour - timedelta(microseconds=1)
+
+    start_of_three_hours_ago = start_of_current_hour - timedelta(hours=3)
+    return isoformat(start_of_three_hours_ago), isoformat(end_of_previous_hour)
+
+# TODO: is this needed??
+# Use now's date to find start and end of previous week
+#   Used for manual debugging and data verification
+def get_previous_3_hours_dates():
+    start_of_hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    start_of_three_hours_ago = start_of_hour - timedelta(hours=3)
+    end_of_three_hours_ago = start_of_three_hours_ago - timedelta(microseconds=1)
+    start_of_six_hours_ago = start_of_three_hours_ago - timedelta(hours=3)
+
+    return isoformat(start_of_six_hours_ago), isoformat(end_of_three_hours_ago)
+
+# Use today's date to find start and end of previous week
+#   Used for --recent --daily
+def get_current_day_dates():
+    today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_end = today_start + timedelta(days=1) - timedelta(microseconds=1)
+
+    return isoformat(today_start), isoformat(today_end)
+
+# Use today's date to find start and end of previous week
+#   Used for --historical --daily
+def get_previous_day_dates():
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    yesterday_start = today - timedelta(days=1)
+    yesterday_end = today - timedelta(microseconds=1)
+
+    return isoformat(yesterday_start), isoformat(yesterday_end)
+
+# Use today's date to find start and end of previous week
+#   Used for --recent --weekly
+def get_current_week_dates():
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    current_week_start = today - timedelta(days=today.weekday())
+    current_week_end = current_week_start + timedelta(days=7) - timedelta(microseconds=1)
+
+    return isoformat(current_week_start), isoformat(current_week_end)
+
+
+# Use today's date to find start and end of previous week
+#   Used for --historical --weekly
+def get_previous_week_dates():
+    today = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    previous_week_start = today - timedelta(days=7+today.weekday())
+    previous_week_end = previous_week_start + timedelta(days=7) - timedelta(microseconds=1)
+
+    return isoformat(previous_week_start), isoformat(previous_week_end)
+
+
+# Use today's date to find start and end of previous week
+#   Used for --recent --monthly
+def get_current_month_dates():
+    current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    current_month_end = current_month_start + timedelta(months=1)
+
+    return isoformat(current_month_start), isoformat(current_month_end)
+
+
+# Use today's date to find start and end of previous week
+#   Used for --historical --monthly
+def get_previous_month_dates():
+    current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    previous_month_start = current_month_start - relativedelta(months=1)
+    previous_month_end = current_month_start - timedelta(microseconds=1)
+
+    return isoformat(previous_month_start), isoformat(previous_month_end)
+
+
+# For simplicity, "season" is currently defined as a set of months
+#   S1 => Spring => 3/21 ~ 6/21
+#   S2 => Summer => 6/21 ~ 9/23
+#   S3 => Fall => 9/23 ~ 12/21
+#   S4 => Winter => 12/21 ~ 3/21
+def get_seasonal_boundaries(date=datetime.now(UTC)):
+    month_start = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month = month_start.month
+    year = month_start.year
+    day_of_month = month_start.day
+
+    return {
+        'S1': (datetime(year, 3, 21), datetime(year, 6, 21) - timedelta(microseconds=1)),
+        'S2': (datetime(year, 6, 21), datetime(year, 9, 23) - timedelta(microseconds=1)),
+        'S3': (datetime(year, 9, 23), datetime(year, 12, 21) - timedelta(microseconds=1)),
+
+        # Winter may use last year or next year
+        'S4': (
+            # We are late in the winter, it has lasted since last year
+            datetime(year, 12, 21) if month == 12 and day_of_month >= 21 \
+                # We are early in the winter, it will last until next year
+            else datetime(year - 1, 12, 21),
+            # We are late in the winter, it has lasted since last year
+            datetime(year + 1, 3, 21) - timedelta(microseconds=1) if month == 12 and day_of_month >= 21 \
+                # We are early in the winter, it will last until next year
+            else datetime(year, 3, 21) - timedelta(microseconds=1)
+        ),
+    }
+
+
+# Given a date, return the name of the season that it falls into
+def get_season(date=datetime.now(UTC)):
+    seasonal_bounds = get_seasonal_boundaries(date=date)
+    for season in seasonal_bounds:
+        (season_start, season_end) = seasonal_bounds[season]
+        if season_start <= date <= season_end:
+            return season
+
+    return None
+
+
+# Compute today's timestamp, use that to find first microsecond of the previous season
+def get_previous_season_dates():
+    # Compute all seasonal boundaries
+    seasonal_bounds = get_seasonal_boundaries()
+    current_season = get_season()
+    (current_season_start, current_season_end) = seasonal_bounds[current_season]
+
+    # Arbitrarily subtract 2 days (any number > 1 will do)
+    a_day_last_season = current_season_start - timedelta(days=2)
+    previous_season = get_season(date=a_day_last_season)
+
+    return seasonal_bounds[previous_season]
+
+
+# Compute today's timestamp, use that to find first microsecond of the current season
+def get_current_season_dates():
+    current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    bounds = get_seasonal_boundaries(date=current_month_start)
+    current_season = get_season(date=current_month_start)
+
+    return bounds[current_season]
+
+
+# Compute today's timestamp, use that to find first microsecond of the previous year
+def get_previous_year_dates():
+    current_year_start = datetime.now(UTC).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    previous_year_start  = current_year_start - relativedelta(years=1)
+    previous_year_end  = current_year_start - timedelta(microseconds=1)
+
+    return isoformat(previous_year_start), isoformat(previous_year_end)
+
+# Compute today's timestamp, use that to find first microsecond of the current year
+def get_current_year_dates():
+    current_year_start = datetime.now(UTC).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    current_year_end  = current_year_start + relativedelta(years=1) - timedelta(microseconds=1)
+
+    return isoformat(current_year_start), isoformat(current_year_end)
+
+
+def truncate(full_str: str|list[any], limit = 20):
+    return f'{full_str[:limit]}...' if len(full_str) > limit else full_str
+
+def redact(redactable: any, key_name: str = '', limit = 20):
+    if isinstance(redactable, dict):
+        # Create a deep copy of input object
+        if key_name == '':
+            raise ValueError(
+                'ERROR: redacting dictionary requires a key_name to redact. Provide a key_name to redact the value.')
+        elif key_name in redactable:
+            # key was found - redact the value
+            return {**redactable, f'{key_name}': truncate(full_str=redactable[key_name], limit=limit)}
+        else:
+            return redactable  # key was not found - return noop
+    if isinstance(redactable, str):
+        # key_name ignored, since value is a string
+        return truncate(full_str=redactable, limit=limit)
+    else:
+        raise TypeError(f'ERROR: unrecognized type - {type(redactable).__name__}')
+
+
+def combine_dataset_rows(existing_df, data_to_merge):
+    # Connect to an in-memory DuckDB database
+    with duckdb.connect(database=':memory:') as con:
+        con.execute("""
+            CREATE OR REPLACE TABLE combined_metrics AS
+            SELECT * FROM existing_df
+            UNION BY NAME
+            SELECT * FROM data_to_merge
+        """)
+
+        return con.execute("SELECT * FROM combined_metrics").fetchdf()
+
+
+
+def merge_new_data(existing_df, data_to_merge):
+    # Determine UNION of columns
+    left_columns = [col for col in existing_df.columns.tolist() if col not in ['type','date']]
+    right_columns = [col for col in data_to_merge.columns.tolist() if col not in ['type','date']]
+
+    # Convert to set for uniqueness
+    all_sensor_ids = list(set(left_columns + right_columns))
+    all_sensor_ids.sort()
+
+    # Loop over columns to build up our clauses
+    # Coalesce all column values where possible
+    sensor_col_names = ""
+    coalesce_columns_clause = ""
+    for id in all_sensor_ids:
+        if id in left_columns and id in right_columns:
+            sensor_col_names += f"COALESCE(r.{id}, l.{id}), "
+            coalesce_columns_clause += f"{id} = COALESCE(s.{id}, t.{id}), "
+        if id in left_columns and id not in right_columns:
+            sensor_col_names += f"l.{id}, "
+            coalesce_columns_clause += f"{id} = t.{id}, "
+        if id not in left_columns and id in right_columns:
+            sensor_col_names += f"r.{id}, "
+            coalesce_columns_clause += f"{id} = s.{id}, "
+
+    # Patch existing data with new data; returns union of both
+    keys = ['type', 'date']
+    existing_df = existing_df.set_index(keys)
+    data_to_merge = data_to_merge.set_index(keys)
+    merged_df = data_to_merge.combine_first(existing_df).reset_index()
+
+    # Define custom categories for the "type" column, maintain this order
+    custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
+    merged_df['type'] = pd.Categorical(merged_df['type'], categories=custom_order, ordered=True)
+    merged_df['date'] = merged_df['date'].astype('str')
+
+    # Sort by type, then reverse sort by date for optimal retrieval of latest metrics
+    merged_df.sort_values(by=['type','date'], ascending=[True, False], inplace=True)
+    return merged_df
+
+
+def calculate_average(existing_df, start_date, end_date):
+    # Connect to an in-memory DuckDB database
+    with duckdb.connect(database=':memory:') as con:
+        all_days = con.execute("SELECT * FROM existing_df where type='day'").fetchdf()
+
+        return all_days
 
 
 # Data cleanup process will be written in R
@@ -62,6 +306,9 @@ def decimal_encoder(obj):
         return float(obj)
     raise TypeError(f"Object of type {obj.__class__.__name__} is not JSON serializable")
 
+def csv_to_geojson(fetch_time):
+    df = pd.read_csv(f'{fetch_time}.csv')
+    df.to_json(f'{fetch_time}.json')
 
 def to_geojson(locations, properties, fetch_time):
     return {
@@ -71,15 +318,12 @@ def to_geojson(locations, properties, fetch_time):
         'features': [
             {
                 'type': 'Feature',
-                'properties': properties[location['datasourceId']],
+                'properties': properties[loc['datasourceId']],
                 'geometry': {
                     'type': 'Point',
-                    'coordinates': [
-                        Decimal(location['lon']).quantize(Decimal('0.0000')),
-                        Decimal(location['lat']).quantize(Decimal('0.0000'))
-                    ]
+                    'coordinates': [ loc['lon'], loc['lat'] ]
                 }
-            } for location in locations
+            } for loc in locations
         ]
     }
 
