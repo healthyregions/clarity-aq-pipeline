@@ -34,7 +34,7 @@ def get_previous_3_hours_dates():
     end_of_three_hours_ago = start_of_three_hours_ago - timedelta(microseconds=1)
     start_of_six_hours_ago = start_of_three_hours_ago - timedelta(hours=3)
 
-    return start_of_six_hours_ago, end_of_three_hours_ago
+    return isoformat(start_of_six_hours_ago), isoformat(end_of_three_hours_ago)
 
 # Use today's date to find start and end of previous week
 #   Used for --recent --daily
@@ -42,7 +42,7 @@ def get_current_day_dates():
     today_start = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1) - timedelta(microseconds=1)
 
-    return today_start, today_end
+    return isoformat(today_start), isoformat(today_end)
 
 # Use today's date to find start and end of previous week
 #   Used for --historical --daily
@@ -51,7 +51,7 @@ def get_previous_day_dates():
     yesterday_start = today - timedelta(days=1)
     yesterday_end = today - timedelta(microseconds=1)
 
-    return yesterday_start, yesterday_end
+    return isoformat(yesterday_start), isoformat(yesterday_end)
 
 # Use today's date to find start and end of previous week
 #   Used for --recent --weekly
@@ -60,7 +60,7 @@ def get_current_week_dates():
     current_week_start = today - timedelta(days=today.weekday())
     current_week_end = current_week_start + timedelta(days=7) - timedelta(microseconds=1)
 
-    return current_week_start, current_week_end
+    return isoformat(current_week_start), isoformat(current_week_end)
 
 
 # Use today's date to find start and end of previous week
@@ -70,7 +70,7 @@ def get_previous_week_dates():
     previous_week_start = today - timedelta(days=7+today.weekday())
     previous_week_end = previous_week_start + timedelta(days=7) - timedelta(microseconds=1)
 
-    return previous_week_start, previous_week_end
+    return isoformat(previous_week_start), isoformat(previous_week_end)
 
 
 # Use today's date to find start and end of previous week
@@ -79,7 +79,7 @@ def get_current_month_dates():
     current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     current_month_end = current_month_start + timedelta(months=1)
 
-    return current_month_start, current_month_end
+    return isoformat(current_month_start), isoformat(current_month_end)
 
 
 # Use today's date to find start and end of previous week
@@ -89,7 +89,7 @@ def get_previous_month_dates():
     previous_month_start = current_month_start - relativedelta(months=1)
     previous_month_end = current_month_start - timedelta(microseconds=1)
 
-    return previous_month_start, previous_month_end
+    return isoformat(previous_month_start), isoformat(previous_month_end)
 
 
 # For simplicity, "season" is currently defined as a set of months
@@ -162,14 +162,14 @@ def get_previous_year_dates():
     previous_year_start  = current_year_start - relativedelta(years=1)
     previous_year_end  = current_year_start - timedelta(microseconds=1)
 
-    return previous_year_start, previous_year_end
+    return isoformat(previous_year_start), isoformat(previous_year_end)
 
 # Compute today's timestamp, use that to find first microsecond of the current year
 def get_current_year_dates():
     current_year_start = datetime.now(UTC).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
     current_year_end  = current_year_start + relativedelta(years=1) - timedelta(microseconds=1)
 
-    return current_year_start, current_year_end
+    return isoformat(current_year_start), isoformat(current_year_end)
 
 
 def truncate(full_str: str|list[any], limit = 20):

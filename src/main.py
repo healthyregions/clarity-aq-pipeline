@@ -16,7 +16,7 @@ from historical import HistoricalMeasurements
 from recent import RecentMeasurements
 from s3 import S3API
 
-from utils import get_previous_week_dates, combine_dataset_rows, merge_new_data, get_current_3_hours_dates
+from utils import get_previous_week_dates, combine_dataset_rows, merge_new_data, get_current_3_hours_dates, get_previous_day_dates, get_previous_month_dates, get_previous_season_dates, get_previous_year_dates
 
 
 logging.getLogger('config').setLevel(level=logging.getLevelName(LOGLEVEL))
@@ -38,12 +38,6 @@ def main(args):
     if (args.startTime or args.endTime) and (args.weekly or args.monthly or args.weekly or args.yearly):
         log.error('Cannot use startTime or endTime with time-averaging. Specify either startTime/endTime OR --weekly / --monthly / --seasonal / --yearly')
         sys.exit(100)
-
-    if args.weekly and args.historical:
-        start_of_week, end_of_week = get_previous_week_dates()
-        HISTORICAL_START_TIME = start_of_week
-        HISTORICAL_END_TIME = end_of_week
-        sys.exit(0)
 
     if args.backup:
         # Use current UTC timestamp as folder_name
@@ -99,6 +93,19 @@ def main(args):
     if args.fetch and args.historical:
         start_time = args.startTime if args.startTime else HISTORICAL_START_TIME
         end_time = args.endTime if args.endTime else HISTORICAL_END_TIME
+
+        # If any helper date ranges provided, override other input methods
+        # Use largest range provided, should encompass the others
+        if args.daily:
+            start_time, end_time = get_previous_day_dates()
+        if args.weekly:
+            start_time, end_time = get_previous_week_dates()
+        if args.monthly:
+            start_time, end_time = get_previous_month_dates()
+        if args.seasonal:
+            start_time, end_time = get_previous_season_dates()
+        if args.yearly:
+            start_time, end_time = get_previous_year_dates()
 
         log.info(f'Fetching historical measurement data from: {CLARITY_HOSTNAME}')
         log.info(f'    Start time: {start_time}')
@@ -281,14 +288,16 @@ if __name__ == '__main__':
 
     # Time-averaging functions - shorthand functions for processes that run once per week / month / season / year
     # For our purposes, a season is defined 3 months of the year
+    parser.add_argument('--daily', action='store_true',
+                        help="Calculate daily average based on last full day")
     parser.add_argument('--weekly', action='store_true',
-                        help="Calculate weekly average based on previous 7 days (assumes it is currently Monday)")
+                        help="Calculate weekly average based on previous full week (Monday - Sunday)")
     parser.add_argument('--monthly', action='store_true',
-                        help="Calculate monthly average calculation based on previous 1 month")
+                        help="Calculate monthly average calculation based on previous full month")
     parser.add_argument('--seasonal', action='store_true',
-                        help="Calculate seasonal average calculation based on previous season (3 months)")
+                        help="Calculate seasonal average calculation based on previous full season (3 months)")
     parser.add_argument('--yearly', action='store_true',
-                        help="Calculate yearly average calculation based on previous 12 months")
+                        help="Calculate yearly average calculation based on previous full year (12 months)")
 
     main(args=parser.parse_args())
 

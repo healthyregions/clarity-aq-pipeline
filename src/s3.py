@@ -115,8 +115,8 @@ class S3API(object):
         new_measurements_df['type'] = pd.Categorical(new_measurements_df['type'], categories=custom_order, ordered=True)
         new_measurements_df['date'] = new_measurements_df['date'].astype('str')
 
-        log.debug(new_measurements_df.info())
-        log.debug(new_measurements_df)
+        new_measurements_df.info()
+        print(new_measurements_df)
 
         # Always acquire lockfile to ensure no one is writing
         while not self.lock():
@@ -128,13 +128,15 @@ class S3API(object):
             df_path = f'{S3_BUCKET_NAME}/current/{metric_name}.parquet'
             existing_df = self.read_file(path=df_path, file_format='parquet', binary=True)
             if existing_df is not None:
+                log.info(f'Updating existing dataset with current metrics: {df_path} ')
                 merged_df = merge_new_data(existing_df=existing_df, data_to_merge=new_measurements_df)
-                self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
             else:
                 log.warn(f'No current dataset found - creating a new dataset from current metrics: {df_path} ')
-                self.write_file(path=df_path, contents=new_measurements_df, file_format='parquet', binary=True, overwrite=True)
+                merged_df = merge_new_data(existing_df=pd.DataFrame(), data_to_merge=new_measurements_df)
+
+            self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
             log.info(f'Successfully updated {metric_name} dataset!')
-            log.debug(existing_df)
+            print(merged_df)
 
         finally:
             # Release lockfile when done writing
@@ -165,7 +167,7 @@ class S3API(object):
             merged_df = merged_df.set_index(columns).sort_values(by=columns, ascending=True).reset_index()
             self.write_file(path=locations_df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
             log.info('Successfully updated locations dataset!')
-            log.debug(merged_df)
+            print(merged_df)
         except Exception as e:
             log.error(f'Failed to merge with locations.parquet: {e}')
             log.error(traceback.format_exc())

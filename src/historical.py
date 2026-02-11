@@ -89,13 +89,13 @@ class HistoricalMeasurements(ClarityAPI):
 
     # Test Data
     #    # Parquet format
-    #    % curl -XPOST 'https://clarity-data-api.clarity.io/v2/report-requests' --header 'x-api-key: ljIoByIfR52LkDReggBa4gJsgQfrNLOET9Kpoxpm' --header 'Content-Type: application/json' -d '{ "org": "cityof58A9", "report": "datasource-measurements", "allDatasources": "true", "outputFrequency": "minute", "startTime": "2026-01-18T00:00:00.000Z", "endTime": "2026-01-19T00:00:00.000Z" }'
+    #    % curl -XPOST 'https://clarity-data-api.clarity.io/v2/report-requests' --header "x-api-key: ${CLARITY_API_KEY}" --header 'Content-Type: application/json' -d '{ "org": "cityof58A9", "report": "datasource-measurements", "allDatasources": "true", "outputFrequency": "minute", "startTime": "2026-01-18T00:00:00.000Z", "endTime": "2026-01-19T00:00:00.000Z" }'
     #    {"reportId": "JB3TAATED1", "reportStatus": "in-progress", ... , "format": "parquet-wide", "metricLabelStyle": "canonical"}}
 
 
     def historical_post_report_request(self, body: dict):
         # format: {"reportId": "JBLLZT8NW9", "reportStatus": "in-progress", "message": "Processing", "report": "datasource-measurements", "urls": [], "query": {"datasourceIds": ["DZFUM1742", "DRJLK4822", ,,, ], "endTime": "2025-11-01T00:00:00.000Z", "outputFrequency": "minute", "startTime": "2025-10-01T00:00:00.000Z", "format": "csv-wide", "metricLabelStyle": "canonical", "qcAssessment": true, "qcFlags": true}}
-        log.info(f'Submitting query: {redacted}')
+        log.info(f'Submitting query: {body}')
         r = requests.post(url=self.historicalUrl, headers=self.headers, data=json.dumps(body))
         r.raise_for_status()
         report_processing = r.json()
