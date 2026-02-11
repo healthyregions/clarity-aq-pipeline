@@ -110,9 +110,9 @@ class S3API(object):
         # Merge latest data into existing dataframe, write as parquet file
         log.info(f'Merging with existing {metric_name}.parquet file...')
 
-        # Define custom categories for the "period" column, maintain this order
+        # Define custom categories for the "type" column, maintain this order
         custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
-        new_measurements_df['period'] = pd.Categorical(new_measurements_df['period'], categories=custom_order, ordered=True)
+        new_measurements_df['type'] = pd.Categorical(new_measurements_df['type'], categories=custom_order, ordered=True)
         new_measurements_df['date'] = new_measurements_df['date'].astype('str')
 
         new_measurements_df.info()
@@ -132,7 +132,7 @@ class S3API(object):
                 merged_df = merge_new_data(existing_df=existing_df, data_to_merge=new_measurements_df)
             else:
                 log.warn(f'No current dataset found - creating a new dataset from current metrics: {df_path} ')
-                merged_df = merge_new_data(existing_df=pd.DataFrame(), data_to_merge=new_measurements_df)
+                merged_df = merge_new_data(existing_df=pd.DataFrame(columns=['type', 'date']), data_to_merge=new_measurements_df)
 
             self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
             log.info(f'Successfully updated {metric_name} dataset!')

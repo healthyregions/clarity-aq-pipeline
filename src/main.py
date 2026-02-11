@@ -163,85 +163,79 @@ def main(args):
             'n_obs': 'n_valid',
             'is_valid_hour': 'is_valid',
             'hour': 'date',
-            'type': 'period',
             'mean_pm25': 'mean_pm25',
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
-        hourly['period'] = 'hour'
+        hourly['type'] = 'hour'
 
         # TODO: Use ISO 8601 Format indicating UTC timezone? browser needs special handling otherwise
         # Currently using something more akin to ISO 9705
         #hourly['date'] = hourly['date'].map(lambda d: dateutil.parser.isoparse(d).isoformat() + 'Z')
 
-        # Ensure column consistency: n_valid, period, date, is_valid, mean_pm2
+        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
         log.info(f'Compiling daily sensor data...')
         daily = pd.read_csv('data/summary-daily.csv').rename(columns={
             'n_valid_hours': 'n_valid',
             'is_valid_day': 'is_valid',
             'date': 'date',
-            'type': 'period',
             'daily_mean_pm25': 'mean_pm25',
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
-        daily['period'] = 'day'
+        daily['type'] = 'day'
 
-        # Ensure column consistency: n_valid, period, date, is_valid, mean_pm2
+        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
         log.info(f'Compiling weekly sensor data...')
         weekly = pd.read_csv('data/summary-weekly.csv').rename(columns={
             'n_valid_days': 'n_valid',
             'is_valid_week': 'is_valid',
             'week': 'date',
-            'type': 'period',
             'weekly_mean_pm25': 'mean_pm25',
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
-        weekly['period'] = 'week'
+        weekly['type'] = 'week'
 
         # Ensure date in the correct format - 2025-W10, 2025-W09, etc
         weekly['date'] = weekly['date'].map(lambda d: d.split('-')[0]+'-W'+d.split('-')[1][1:].zfill(2))
 
-        # Ensure column consistency: n_valid, period, date, is_valid, mean_pm2
+        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
         log.info(f'Compiling monthly sensor data...')
         monthly = pd.read_csv('data/summary-monthly.csv').rename(columns={
             'n_valid_days': 'n_valid',
             'is_valid_month': 'is_valid',
             'month': 'date',
-            'type': 'period',
             'monthly_mean_pm25': 'mean_pm25',
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
-        monthly['period'] = 'month'
+        monthly['type'] = 'month'
 
         # Ensure date in the correct format - 2025-10, 2025-09, etc
         monthly['date'] = monthly['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1].zfill(2))
 
 
-        # Ensure column consistency: n_valid, period, date, is_valid, mean_pm2
+        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
         log.info(f'Compiling seasonal sensor data...')
         seasonal = pd.read_csv('data/summary-seasonal.csv').rename(columns={
             'n_valid_days': 'n_valid',
             'is_valid_season': 'is_valid',
             'season': 'date',
-            'type': 'period',
             'seasonal_mean_pm25': 'mean_pm25',
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
-        seasonal['period'] = 'season'
+        seasonal['type'] = 'season'
 
         # Ensure date in the correct format - 2025-S03, 2025-S02, etc
         seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1][1:].zfill(2))
 
-        # Ensure column consistency: n_valid, period, date, is_valid, mean_pm2
+        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
         log.info(f'Compiling yearly sensor data...')
         yearly = pd.read_csv('data/summary-yearly.csv').rename(columns={
             'n_valid_days': 'n_valid',
             'is_valid_season': 'is_valid',
-            'year': 'date',
-            'type': 'period',
+            'season': 'date',
             'yearly_mean_pm25': 'mean_pm25',
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
-        yearly['period'] = 'year'
+        yearly['type'] = 'year'
 
         # Concatenate all rows of different types into single dataframe
         merged_sensor_df = pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
@@ -250,7 +244,7 @@ def main(args):
         # TODO: Support other metrics?
         for metric in ['mean_pm25']:
             log.info(f'Pivoting data for {metric}.parquet')
-            new_sensor_df = pd.pivot_table(data=merged_sensor_df, values=metric, index=['period', 'date'], columns=['datasourceId'], aggfunc='last', dropna=True)
+            new_sensor_df = pd.pivot_table(data=merged_sensor_df, values=metric, index=['type', 'date'], columns=['datasourceId'], aggfunc='last', dropna=True)
             new_sensor_df = new_sensor_df.rename(columns={'datasourceId': ''}).reset_index()
 
             s3api.update_measurements_df(
