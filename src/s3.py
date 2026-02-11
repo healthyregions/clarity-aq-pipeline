@@ -110,9 +110,9 @@ class S3API(object):
         # Merge latest data into existing dataframe, write as parquet file
         log.info(f'Merging with existing {metric_name}.parquet file...')
 
-        # Define custom categories for the "type" column, maintain this order
+        # Define custom categories for the "period" column, maintain this order
         custom_order = ['year', 'season', 'month', 'week', 'day', 'hour']  # order by least to most rows
-        new_measurements_df['type'] = pd.Categorical(new_measurements_df['type'], categories=custom_order, ordered=True)
+        new_measurements_df['period'] = pd.Categorical(new_measurements_df['period'], categories=custom_order, ordered=True)
         new_measurements_df['date'] = new_measurements_df['date'].astype('str')
 
         new_measurements_df.info()

@@ -293,7 +293,7 @@ hourly <- df0 %>%
   group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = sum(!is.na(.data[[pm_col]])),
-    type = "hour",
+    period = "hour",
     mean_pm25 = mean(.data[[pm_col]], na.rm = TRUE),
     .groups = "drop"
   ) %>%
@@ -305,7 +305,7 @@ cat("Hourly rows (all): ", nrow(hourly), "\n")
 df_hourly <- hourly %>%
   filter(is_valid) %>%
   select(datasourceId, sourceId, date, mean_pm25, n_valid, is_valid) %>%
-  mutate(type = "hour")
+  mutate(period = "hour")
 cat("Valid hourly rows (>=75% completeness): ", nrow(df_hourly), "\n")
 print(df_hourly)
 
@@ -318,7 +318,7 @@ daily <- df_hourly %>%
   group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = n(),                     # Count of valid hours
-    type = "day",
+    period = "day",
     mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid hourly means
     .groups = "drop"
   ) %>%
@@ -326,7 +326,7 @@ daily <- df_hourly %>%
 
 # Keep only valid days
 cat("Daily rows (all): ", nrow(daily), "\n")
-df_daily <- daily %>% mutate(type = "day") %>% filter(is_valid)
+df_daily <- daily %>% mutate(period = "day") %>% filter(is_valid)
 cat("Valid daily rows (>20 valid hours): ", nrow(df_daily), "\n")
 if (nrow(df_daily) > 0) {
     print(df_daily)
@@ -344,7 +344,7 @@ weekly <- df_daily %>%
   group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = n(),                     # Count of valid days
-    type = "week",
+    period = "week",
     mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid daily means
     .groups = "drop"
   ) %>%
@@ -352,7 +352,7 @@ weekly <- df_daily %>%
 
 # Keep only valid weeks
 cat("Weekly rows (all): ", nrow(weekly), "\n")
-df_weekly <- weekly %>% mutate(type = "week") %>% filter(is_valid)
+df_weekly <- weekly %>% mutate(period = "week") %>% filter(is_valid)
 cat("Valid weekly rows (>5 valid days):" , nrow(df_weekly), "\n")
 if (nrow(df_weekly) > 0) {
     print(df_weekly)
@@ -366,7 +366,7 @@ monthly <- df_daily %>%
   group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = n(),                     # Count of valid days
-    type = "month",
+    period = "month",
     mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid daily means
     .groups = "drop"
   ) %>%
@@ -374,7 +374,7 @@ monthly <- df_daily %>%
 
 # Keep only valid months
 cat("Monthly rows (all): ", nrow(monthly), "\n")
-df_monthly <- monthly %>% mutate(type = "month") %>% filter(is_valid)
+df_monthly <- monthly %>% mutate(period = "month") %>% filter(is_valid)
 cat("Valid monthly rows (>21 valid days): ", nrow(df_monthly), "\n")
 if (nrow(df_monthly) > 0) {
     print(df_monthly)
@@ -399,7 +399,7 @@ seasonal <- df_daily %>%
   ) %>% group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = n(),                     # Count of valid days
-    type = "season",
+    period = "season",
     mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid daily means
     .groups = "drop"
   ) %>%
@@ -407,7 +407,7 @@ seasonal <- df_daily %>%
 
 # Keep only valid seasons
 cat("Seasonal rows (all): ", nrow(seasonal), "\n")
-df_seasonal <- seasonal %>% mutate(type = "season") %>% filter(is_valid)
+df_seasonal <- seasonal %>% mutate(period = "season") %>% filter(is_valid)
 cat("Valid seasonal rows (>60 valid days): ", nrow(df_seasonal), "\n")
 if (nrow(df_seasonal) > 0) {
     print(df_seasonal)
@@ -420,7 +420,7 @@ yearly <- df_daily %>%
   group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = n(),                     # Count of valid days
-    type = "year",
+    period = "year",
     mean_pm25 = mean(mean_pm25, na.rm = TRUE),  # Mean of valid daily means
     .groups = "drop"
   ) %>%
@@ -428,7 +428,7 @@ yearly <- df_daily %>%
 
 # Keep only valid years
 cat("Yearly rows (all): ", nrow(yearly), "\n")
-df_yearly <- yearly %>% mutate(type = "year") %>% filter(is_valid)
+df_yearly <- yearly %>% mutate(period = "year") %>% filter(is_valid)
 cat("Valid yearly rows (>220 valid days): ", nrow(df_yearly), "\n")
 if (nrow(df_yearly) > 0) {
     print(df_yearly)
