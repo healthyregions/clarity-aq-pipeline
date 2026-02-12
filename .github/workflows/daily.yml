@@ -18,7 +18,7 @@ on:
   #            │ │ │ │ │
   #            * * * * *
   schedule:
-    # Run once per hour at ~ 5 minutes before the hour
+    # Run once per day at ~ 1:30 AM
     - cron: "30 1 * * *"
     
   # Allows you to run this workflow manually from the Actions tab
