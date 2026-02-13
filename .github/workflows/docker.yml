@@ -57,7 +57,6 @@ jobs:
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
-            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
           tags: |
             # set latest tag for default branch
             type=raw,value=latest,enable={{is_default_branch}}
