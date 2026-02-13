@@ -5,7 +5,9 @@
 # When this runs, it will fetch Recent Measurements (per-minute data) for the past ~3 hours
 # Specifically it will find the beginning of the current hour then rewind 3 hours, and fetch everything that has happened since then.
 
-name: hourly
+# This pulls from Clarity's Fast cache, which may contain only ~24 hour of cached per-minute data.
+
+name: recent
 
 # Controls when the workflow will run
 on:
