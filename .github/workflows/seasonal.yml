@@ -1,0 +1,64 @@
+# This workflow will fetch air quality sensor data from the Clarity REST API v2,
+# run cleanup operations on this data, and then merge it into a running Parquet dataset
+# in our S3 bucket
+
+# Once per season, this will fetch Historical Measurements (per-minute data) for the previous full season
+
+# For now, a "season" is defined as a range of dates. 2026-S1, 2026-S2, etc gives us a consistent way to label these seasons
+#   S1 => Spring => 3/21 ~ 6/21
+#   S2 => Summer => 6/21 ~ 9/23
+#   S3 => Fall => 9/23 ~ 12/21
+#   S4 => Winter => 12/21 ~ 3/21
+
+name: historical-seasonal
+
+# Controls when the workflow will run
+on:
+  #            ┌───────────── minute (0 - 59)
+  #            │ ┌───────────── hour (0 - 23)
+  #            │ │ ┌───────────── day of the month (1 - 31)
+  #            │ │ │ ┌───────────── month (1 - 12)
+  #            │ │ │ │ ┌───────────── day of the week (0 - 6)
+  #            │ │ │ │ │                                   
+  #            │ │ │ │ │
+  #            │ │ │ │ │
+  #            * * * * *
+  schedule:
+    # Run once per season, on the first day of each season at ~ 1:30 AM
+    - cron: "30 1 21 12 *"
+    - cron: "30 1 21 3 *"
+    - cron: "30 1 21 6 *"
+    - cron: "30 1 23 9 *"
+    
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "pipeline"
+  # This allows us to share storage between the different stages of the pipeline
+  pipeline:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so our job can access it
+      - uses: actions/checkout@v4
+
+      # Login to GHCR.io to pull our pre-built Docker image
+      - name: Log in to GHCR.io
+        uses: docker/login-action@v3
+        with:
+          # Authenticate using the built-in GITHUB_TOKEN
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Copy default envvar parameters for base config
+      - name: Create base parameters
+        run: cp .env.example .env
+
+      # Fetch Clarity API data and save raw files locally
+      - name: Fetch Clarity sensor data, clean CSV data, merge into Parquet dataset
+        run: docker compose run --remove-orphans -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} aq --historical --fetch --merge --clean --seasonal
