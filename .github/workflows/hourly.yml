@@ -18,10 +18,10 @@ on:
   #            │ │ │ │ │
   #            │ │ │ │ │
   #            * * * * *
-  # Disable this temporarily for testing
-  #schedule:
-    # Run every 20 minutes for freshest data
-  #  - cron: "*/20 * * * *"
+  # Enable the pipeline again after testing
+  schedule:
+    # Run every 20 minutes to refresh data
+    - cron: "*/20 * * * *"
     
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
