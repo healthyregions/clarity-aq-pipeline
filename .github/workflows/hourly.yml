@@ -2,7 +2,8 @@
 # run cleanup operations on this data, and then merge it into a running Parquet dataset
 # in our S3 bucket
 
-# Once per hour, this will fetch Recent Measurements (per-minute data) for the past ~3 hours
+# When this runs, it will fetch Recent Measurements (per-minute data) for the past ~3 hours
+# Specifically it will find the beginning of the current hour then rewind 3 hours, and fetch everything that has happened since then.
 
 name: hourly
 
@@ -18,8 +19,8 @@ on:
   #            │ │ │ │ │
   #            * * * * *
   schedule:
-    # Run once per hour at ~ 5 minutes before the hour
-    - cron: "55 * * * *"
+    # Run every 20 minutes for freshest data
+    - cron: "*/20 * * * *"
     
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
