@@ -18,11 +18,14 @@ SHELL ["micromamba", "run", "-n", "base", "/bin/bash", "-c"]
 # Install R dependencies
 RUN R -e "install.packages(c('dplyr', 'slider', 'jsonlite', 'arrow'))"
 
-# Install conda dependenciess, then our Python and R source
-COPY environment.yml .
+# Install conda dependencies
+COPY environment.yml ./environment.yml
 RUN micromamba install -n base -f environment.yml -y && \
     micromamba clean --all --yes
-COPY . .
+
+# Include our Python and R source
+COPY src ./src
+COPY clarity_qa_qc.R ./clarity_qa_qc.R
 
 # Mount in data volume at runtime
 VOLUME /home/rstudio/data
