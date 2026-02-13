@@ -4,7 +4,7 @@
 
 # Once per week, this will fetch Historical Measurements (per-minute data) for the previous full week
 
-name: weekly
+name: historical-weekly
 
 # Controls when the workflow will run
 on:

@@ -4,7 +4,7 @@
 
 # Once per month, this will fetch Historical Measurements (per-minute data) for the previous full month
 
-name: monthly
+name: historical-monthly
 
 # Controls when the workflow will run
 on:

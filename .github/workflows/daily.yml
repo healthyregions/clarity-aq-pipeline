@@ -4,7 +4,7 @@
 
 # Once per day, this will fetch Historical Measurements (per-minute data) for the previous full day
 
-name: daily
+name: historical-daily
 
 # Controls when the workflow will run
 on:

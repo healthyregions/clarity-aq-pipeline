@@ -7,7 +7,8 @@
 
 # This pulls from Clarity's Fast cache, which may contain only ~24 hour of cached per-minute data.
 
-name: recent
+name: recent-hourly
+# NOTE: "hourly" here refers to the type averages produced, not how frequently the task should run that produces them
 
 # Controls when the workflow will run
 on:
