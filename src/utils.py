@@ -109,15 +109,11 @@ def get_seasonal_boundaries(date=datetime.now(UTC)):
         'S3': (datetime(year, 9, 23), datetime(year, 12, 21) - timedelta(microseconds=1)),
 
         # Winter may use last year or next year
+        #   month == 12 and day_of_month >= 21  =>  we are early in the winter, it will last until next year
+        #   month != 12 =>  we are late in the winter, it has gone on since last year
         'S4': (
-            # We are late in the winter, it has lasted since last year
-            datetime(year, 12, 21) if month == 12 and day_of_month >= 21 \
-                # We are early in the winter, it will last until next year
-            else datetime(year - 1, 12, 21),
-            # We are late in the winter, it has lasted since last year
-            datetime(year + 1, 3, 21) - timedelta(microseconds=1) if month == 12 and day_of_month >= 21 \
-                # We are early in the winter, it will last until next year
-            else datetime(year, 3, 21) - timedelta(microseconds=1)
+            datetime(year if month == 12 and day_of_month >= 21 else year - 1, 12, 21),
+            datetime(year + 1 if month == 12 and day_of_month >= 21 else year, 3, 21)  - timedelta(microseconds=1)
         ),
     }
 

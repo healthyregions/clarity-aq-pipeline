@@ -35,10 +35,6 @@ def main(args):
     global HISTORICAL_START_TIME, HISTORICAL_END_TIME
     s3api = S3API()
 
-    if (args.startTime or args.endTime) and (args.weekly or args.monthly or args.weekly or args.yearly):
-        log.error('Cannot use startTime or endTime with time-averaging. Specify either startTime/endTime OR --weekly / --monthly / --seasonal / --yearly')
-        sys.exit(100)
-
     if args.backup:
         # Use current UTC timestamp as folder_name
         folder_name = datetime.now(UTC).strftime('%Y-%m-%dT%H:%M:%S.000Z')
@@ -46,6 +42,21 @@ def main(args):
         destination_folder = s3api.backup_current_dataset(folder_name=folder_name)
         log.error(f'Parquet backup process complete: {destination_folder}')
         sys.exit(0)
+
+    if args.locations:
+        log.info(f'Merging updated location data from: {args.locations}')
+        new_locations_df = pd.read_parquet(args.locations)
+        print(new_locations_df)
+
+        log.info(f'Result of merge:')
+        merged_df = s3api.update_locations_df(new_locations_df)
+        print(merged_df[['datasourceId','name','community','zip']][merged_df['community'] == 'ASHBURN'])
+
+        sys.exit(0)
+
+    if (args.startTime or args.endTime) and (args.weekly or args.monthly or args.weekly or args.yearly):
+        log.error('Cannot use startTime or endTime with time-averaging. Specify either startTime/endTime OR --weekly / --monthly / --seasonal / --yearly')
+        sys.exit(100)
 
     # Sanity check - make sure that fetch was provided either --recent or --historical
     if (args.fetch or args.clean) and not args.historical and not args.recent:
@@ -75,8 +86,6 @@ def main(args):
         clarity = RecentMeasurements(s3api=s3api)
         recent_measurements_df, locations_df, token = clarity.recent_fetch_metrics(start_time=start_time)
 
-        # Merge locations_df into S3 dataset
-
         # Save to CSV for cleaning
         output_path = os.path.join(LOCAL_OUTPUT_DIR, 'raw-measurements-recent.csv')
         recent_measurements_df.to_csv(output_path)
@@ -96,6 +105,8 @@ def main(args):
 
         # If any helper date ranges provided, override other input methods
         # Use largest range provided, should encompass the others
+        if args.hourly:
+            start_time, end_time = get_current_3_hours_dates()
         if args.daily:
             start_time, end_time = get_previous_day_dates()
         if args.weekly:
@@ -285,6 +296,13 @@ if __name__ == '__main__':
     # Admin / Debug commands
     parser.add_argument('-b', '--backup', action='store_true',
                         help="Backup existing parquet files in S3")
+    parser.add_argument('--hourly', action='store_true',
+                        help="Calculate hourly average based on last 3 full hours. This is not called automatically by the pipeline, and --recent is used instead. This command is for repair / testing / DEBUG purposes only.")
+
+    # Manually merge in new columns to the locations dataset (e.g. community, zip, ward, etc)
+    # TODO: Hopefully in the future the can be returned by Clarity's API to keep it updated and consistent
+    parser.add_argument('-L', '--locations', nargs='?', default=None,
+                        help="Provide a path to a locations.parquet to merge in new columns to the locations dataset.")
 
     # Time-averaging functions - shorthand functions for processes that run once per week / month / season / year
     # For our purposes, a season is defined 3 months of the year

@@ -160,14 +160,12 @@ class S3API(object):
         log.info(f'Merging new location details into {locations_df_path}...')
 
         try:
-            existing_df = self.read_dataset(df_path=locations_df_path, columns=columns)
-            merged_df = new_locations_df.combine_first(existing_df)
-            merged_df.drop_duplicates(inplace=True, subset=columns)
-            merged_df.dropna(inplace=True, subset=columns, how='all')
-            merged_df = merged_df.set_index(columns).sort_values(by=columns, ascending=True).reset_index()
+            existing_df = self.read_dataset(df_path=locations_df_path, columns=columns).set_index(columns)
+            merged_df = new_locations_df.set_index(columns).combine_first(existing_df).sort_values(by=columns, ascending=True).reset_index()
             self.write_file(path=locations_df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
             log.info('Successfully updated locations dataset!')
             print(merged_df)
+            return merged_df
         except Exception as e:
             log.error(f'Failed to merge with locations.parquet: {e}')
             log.error(traceback.format_exc())
