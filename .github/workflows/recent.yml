@@ -2,9 +2,13 @@
 # run cleanup operations on this data, and then merge it into a running Parquet dataset
 # in our S3 bucket
 
-# Once per day, this will fetch Historical Measurements (per-minute data) for the previous full day
+# When this runs, it will fetch Recent Measurements (per-minute data) for the past ~3 hours
+# Specifically it will find the beginning of the current hour then rewind 3 hours, and fetch everything that has happened since then.
 
-name: historical-daily
+# This pulls from Clarity's Fast cache, which may contain only ~24 hour of cached per-minute data.
+
+name: recent-hourly
+# NOTE: "hourly" here refers to the type averages produced, not how frequently the task should run that produces them
 
 # Controls when the workflow will run
 on:
@@ -17,9 +21,10 @@ on:
   #            │ │ │ │ │
   #            │ │ │ │ │
   #            * * * * *
+  # Enable the pipeline again after testing
   schedule:
-    # Run once per day at ~ 1:30 AM
-    - cron: "30 1 * * *"
+    # Run every 20 minutes (starting at 45min past the hour) to refresh data
+    - cron: "45/20 * * * *"
     
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -52,5 +57,5 @@ jobs:
 
       # Fetch Clarity API data and save raw files locally
       - name: Fetch Clarity sensor data, clean CSV data, merge into Parquet dataset
-        run: docker compose run --remove-orphans -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} aq --historical --fetch --merge --clean --daily
+        run: docker compose run --remove-orphans -e CLARITY_API_KEY=${{ secrets.CLARITY_API_TOKEN }} -e S3_ACCESS_KEY=${{ secrets.S3_ACCESS_KEY }} -e S3_SECRET_KEY=${{ secrets.S3_SECRET_KEY }} aq --recent --fetch --merge --clean
 

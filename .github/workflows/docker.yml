@@ -14,7 +14,15 @@ name: docker-build
 
 on:
   # Trigger the workflow when new commits are pushed to the "main" branch
+  # Only run for paths that would affect the Docker image contents
+  # This would skip (for example) building a new image every time we modify the README
   push:
+    paths:
+      - '.dockerignore'
+      - 'Dockerfile'
+      - 'environment.yml'
+      - 'src/**'
+      - '**/*.R'
     branches:
       - main
 
@@ -48,7 +56,6 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
           tags: |
             # set latest tag for default branch
