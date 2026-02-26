@@ -123,20 +123,23 @@ class S3API(object):
             log.warn('Waiting to acquire lockfile - retrying in 10s')
             sleep(10)
 
+        # Merge with current dataset, or create a new one if it doesn't exist
+        metric_df_path = f'{S3_BUCKET_NAME}/current/{metric_name}.parquet.brotli'
         try:
-            # Merge with current dataset, or create a new one if it doesn't exist
-            df_path = f'{S3_BUCKET_NAME}/current/{metric_name}.parquet'
-            existing_df = self.read_file(path=df_path, file_format='parquet', binary=True)
+            existing_df = self.read_file(path=metric_df_path, file_format='parquet', binary=True)
             if existing_df is not None:
-                log.info(f'Updating existing dataset with current metrics: {df_path} ')
+                log.info(f'Updating existing dataset with current metrics: {metric_df_path} ')
                 merged_df = merge_new_data(existing_df=existing_df, data_to_merge=new_measurements_df)
             else:
-                log.warn(f'No current dataset found - creating a new dataset from current metrics: {df_path} ')
+                log.warn(f'No current dataset found - creating a new dataset from current metrics: {metric_df_path} ')
                 merged_df = merge_new_data(existing_df=pd.DataFrame(columns=['type', 'date']), data_to_merge=new_measurements_df)
 
-            self.write_file(path=df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
+            self.write_file(path=metric_df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
             log.info(f'Successfully updated {metric_name} dataset!')
             print(merged_df)
+        except Exception as e:
+            log.error(f'Failed to merge with {metric_df_path}: {e}')
+            log.error(traceback.format_exc())
 
         finally:
             # Release lockfile when done writing
@@ -156,7 +159,7 @@ class S3API(object):
 
         # Merge with current dataset, or create a new one if it doesn't exist
         columns = ['datasourceId','sourceId']
-        locations_df_path = f'{S3_BUCKET_NAME}/current/locations.parquet'
+        locations_df_path = f'{S3_BUCKET_NAME}/current/locations.parquet.brotli'
         log.info(f'Merging new location details into {locations_df_path}...')
 
         try:
@@ -167,7 +170,7 @@ class S3API(object):
             print(merged_df)
             return merged_df
         except Exception as e:
-            log.error(f'Failed to merge with locations.parquet: {e}')
+            log.error(f'Failed to merge with {locations_df_path}: {e}')
             log.error(traceback.format_exc())
         finally:
             # Release lockfile when done writing
@@ -252,7 +255,7 @@ class S3API(object):
             #log.debug(table)
             with self.client.open(path, mode) as f:
                 log.debug(f'Writing parquet file to S3: {path}')
-                pq.write_table(table, f)
+                pq.write_table(table, f, compression='BROTLI')
                 log.info(f'Successfully updated parquet file in S3: {path}')
             return self.client.stat(path)['size']
         if file_format == 'raw':
