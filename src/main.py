@@ -268,7 +268,7 @@ if __name__ == '__main__':
     #     Historical Measurements => startTime to endTime
     #     Recent Measurements => startTime to now
     parser.add_argument('-H', '--historical', action='store_true',
-                        help="Request a report of historical measurements between startTime and endTime (may take awhile). Defaults to previous month.")
+                        help="Request a report of historical measurements between startTime and endTime (may take awhile). Defaults to previous month. WARNING: Historical Measurement requests are expensive for the Clarity API, and are limited to ~30 requests every ~24 hours.")
     parser.add_argument('-r', '--recent', action='store_true',
                         help="Compute recent measurements data between startTime and now. Defaults to 1 hour prior to time of request.")
 
@@ -284,7 +284,7 @@ if __name__ == '__main__':
 
     # Actions to perform on the given set of measurements
     parser.add_argument('-f', '--fetch', action='store_true',
-                        help="Fetch new measurement values from Clarity REAST API V2 (may take awhile)")
+                        help="Fetch new measurement values from Clarity REST API V2 (may take awhile)")
     parser.add_argument('-c', '--clean', action='store_true',
                         help="Clean the measurement data by running the related R script, compute daily/hourly averages")
     parser.add_argument('-m', '--merge', action='store_true',
