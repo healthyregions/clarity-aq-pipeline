@@ -139,7 +139,7 @@ def get_previous_season_dates():
     a_day_last_season = current_season_start - timedelta(days=2)
     previous_season = get_season(date=a_day_last_season)
 
-    return seasonal_bounds[previous_season], previous_season
+    return seasonal_bounds[previous_season]
 
 
 # Compute today's timestamp, use that to find first microsecond of the current season
@@ -148,7 +148,7 @@ def get_current_season_dates():
     bounds = get_seasonal_boundaries(date=current_month_start)
     current_season = get_season(date=current_month_start)
 
-    return bounds[current_season], current_season
+    return bounds[current_season]
 
 
 # Compute today's timestamp, use that to find first microsecond of the previous year
