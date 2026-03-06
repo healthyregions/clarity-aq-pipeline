@@ -234,15 +234,12 @@ def main(args):
         })
         seasonal['type'] = 'season'
 
-        # Ensure date in the correct format - 2025-S03, 2025-S02, etc
-        seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1][1:].zfill(2))
-
         # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
         log.info(f'Compiling yearly sensor data...')
         yearly = pd.read_csv('data/summary-yearly.csv').rename(columns={
             'n_valid_days': 'n_valid',
             'is_valid_season': 'is_valid',
-            'season': 'date',
+            'year': 'date',
             'yearly_mean_pm25': 'mean_pm25',
             # .. define new metrics here, use consistent column names for hourly + daily ... #
         })
