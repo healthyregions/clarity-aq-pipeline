@@ -103,16 +103,16 @@ def get_seasonal_boundaries(date=datetime.now(UTC)):
     year = month_start.year
 
     return {
-        'spring': (datetime(year, 3, 0), datetime(year, 6, 0) - timedelta(microseconds=1)),
-        'summer': (datetime(year, 6, 0), datetime(year, 9, 0) - timedelta(microseconds=1)),
-        'autumn': (datetime(year, 9, 0), datetime(year, 12, 0) - timedelta(microseconds=1)),
+        'spring': (datetime(year, 3, 1, tzinfo=UTC), datetime(year, 6, 1, tzinfo=UTC) - timedelta(microseconds=1)),
+        'summer': (datetime(year, 6, 1, tzinfo=UTC), datetime(year, 9, 1, tzinfo=UTC) - timedelta(microseconds=1)),
+        'autumn': (datetime(year, 9, 1, tzinfo=UTC), datetime(year, 12, 1, tzinfo=UTC) - timedelta(microseconds=1)),
 
         # Winter may use last year or next year
         #   month == 12 and day_of_month >= 21  =>  we are early in the winter, it will last until next year
         #   month != 12 =>  we are late in the winter, it has gone on since last year
         'winter': (
-            datetime(year if month == 12 else year - 1, 12, 0),
-            datetime(year + 1 if month == 12 else year, 3, 0) - timedelta(microseconds=1)
+            datetime(year if month == 12 else year - 1, 12, 1, tzinfo=UTC),
+            datetime(year + 1 if month == 12 else year, 3, 1, tzinfo=UTC) - timedelta(microseconds=1)
         ),
     }
 
@@ -138,17 +138,19 @@ def get_previous_season_dates():
     # Arbitrarily subtract 2 days (any number > 1 will do)
     a_day_last_season = current_season_start - timedelta(days=2)
     previous_season = get_season(date=a_day_last_season)
+    (previous_season_start, previous_season_end) = seasonal_bounds[previous_season]
 
-    return seasonal_bounds[previous_season]
+    return isoformat(previous_season_start), isoformat(previous_season_end)
 
 
 # Compute today's timestamp, use that to find first microsecond of the current season
 def get_current_season_dates():
     current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    bounds = get_seasonal_boundaries(date=current_month_start)
+    seasonal_bounds = get_seasonal_boundaries(date=current_month_start)
     current_season = get_season(date=current_month_start)
+    (current_season_start, current_season_end) = seasonal_bounds[current_season]
 
-    return bounds[current_season]
+    return isoformat(current_season_start), isoformat(current_season_end)
 
 
 # Compute today's timestamp, use that to find first microsecond of the previous year

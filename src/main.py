@@ -50,7 +50,7 @@ def main(args):
 
         log.info(f'Result of merge:')
         merged_df = s3api.update_locations_df(new_locations_df)
-        print(merged_df[['datasourceId','name','community','zip']][merged_df['community'] == 'ASHBURN'])
+        print(merged_df[['datasourceId','name','community','zip','ward']][merged_df['community'] == 'ASHBURN'])
 
         sys.exit(0)
 
