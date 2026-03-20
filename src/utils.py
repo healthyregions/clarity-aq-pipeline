@@ -1,14 +1,22 @@
 import json
+import os
+import subprocess
+import sys
+import traceback
 from decimal import Decimal
 
 # timedelta for microseconds/days/hours, relativedelta for months/years
 from datetime import datetime, UTC, timedelta
+from typing import Any
+
 from dateutil.relativedelta import relativedelta
 
 import duckdb
 import pandas as pd
 from pandas import DataFrame
 from pathlib import Path
+
+from config import log, LOCAL_OUTPUT_DIR
 
 # For Pandas > 3.0.0, DType==string is not yet well-supported
 pd.options.future.infer_string = False
@@ -171,7 +179,33 @@ def get_current_year_dates():
 def truncate(full_str: str|list[any], limit = 20):
     return f'{full_str[:limit]}...' if len(full_str) > limit else full_str
 
-def redact(redactable: any, key_name: str = '', limit = 20):
+def run_r_script(scriptPath: str, inputFile: str, outputFile: str, metricName: str, minObsPerHour: int):
+    try:
+        output = subprocess.check_output([
+            'Rscript',
+            scriptPath,
+            metricName,
+            inputFile,
+            outputFile,
+            minObsPerHour
+        ], universal_newlines=True, stderr=subprocess.PIPE)
+        print(output.strip())
+
+        return pd.read_csv(outputFile)
+    except subprocess.CalledProcessError as ex:
+        log.error('R script failed. Error:', ex.stderr)
+        traceback.print_exc()
+        sys.exit(500)
+    except FileNotFoundError as ex:
+        log.error('ERROR: File not found.', ex)
+        traceback.print_exc()
+        sys.exit(404)
+    except Exception as ex:
+        log.error('ERROR: Rscript encountered an unknown exception: ', ex)
+        traceback.print_exc()
+        sys.exit(501)
+
+def redact(redactable: Any, key_name: str = '', limit = 20):
     if isinstance(redactable, dict):
         # Create a deep copy of input object
         if key_name == '':

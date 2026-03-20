@@ -1,0 +1,49 @@
+
+# Key here determines output_dataset_name: {metric}.parquet.brotli
+
+mean_pm25:
+  outputFrequency: minute
+  metricSelect: 'only :pm25 + :internal'
+  minObsPerHour: '3'
+  qc: true
+  cleaningScript: ./scripts/pm25_qa_qc.R
+  postprocessing:
+    renameColumns:
+      #"pm2_5ConcMassIndividual.raw": 'mean_pm25'
+      time: 'date'
+      n_obs: 'n_valid'
+      is_valid: 'is_valid'
+      hour: 'date'
+      mean_pm25: 'mean_pm25'
+      n_valid_hours: 'n_valid'
+      is_valid_day: 'is_valid'
+      date: 'date'
+      daily_mean_pm25: 'mean_pm25'
+      n_valid_days: 'n_valid'
+      is_valid_week: 'is_valid'
+      week: 'date'
+      weekly_mean_pm25: 'mean_pm25'
+      is_valid_month: 'is_valid'
+      month: 'date'
+      monthly_mean_pm25: 'mean_pm25'
+      is_valid_season: 'is_valid'
+      season: 'date'
+      seasonal_mean_pm25: 'mean_pm25'
+      is_valid_year: 'is_valid'
+      year: 'date'
+      yearly_mean_pm25: 'mean_pm25'
+
+nowcast_aqi:
+  outputFrequency: hour
+  metricSelect: 'only *nowcast*'
+  cleaningScript: ./scripts/aqi_qa_qc.R
+
+  postprocessing:
+    renameColumns:
+      outputFrequency: 'type'
+      endOfPeriod: 'date'
+      #'pm2_5ConcMassNowcastUsEpaAqi.value': 'nowcast_aqi'
+      #'pm2_5ConcMassNowcastUsEpaAqi': 'nowcast_aqi'
+
+
+# Future: ... define new operations for NO2 + Black Carbon ...

@@ -145,6 +145,9 @@ class S3API(object):
             # Release lockfile when done writing
             self.unlock()
 
+    def merge_locstions_df(self, existing_df, nee_df2):
+        columns = ['datasourceId', 'sourceId']
+        return nee_df2.set_index(columns).combine_first(existing_df).sort_values(by=columns, ascending=True).reset_index()
 
     # Merged lat/lon coordinates into our list of known sensorIds
     #   - Acquire the lock to claim exclusive write access to the data
@@ -164,7 +167,7 @@ class S3API(object):
 
         try:
             existing_df = self.read_dataset(df_path=locations_df_path, columns=columns).set_index(columns)
-            merged_df = new_locations_df.set_index(columns).combine_first(existing_df).sort_values(by=columns, ascending=True).reset_index()
+            merged_df = self.merge_locstions_df(existing_df, new_locations_df)
             self.write_file(path=locations_df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
             log.info('Successfully updated locations dataset!')
             print(merged_df)

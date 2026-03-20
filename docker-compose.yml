@@ -67,6 +67,8 @@ services:
     profiles: ["none"]
     volumes:
       - ./data:/home/rstudio/data/
+      - ./src:/home/rstudio/src/
+      - ./scripts:/home/rstudio/scripts/
     command: >
       python ./src/main.py --recent --fetch --clean --merge
 
