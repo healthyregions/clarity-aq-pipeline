@@ -1,13 +1,9 @@
 import argparse
 import logging
 import os
-import subprocess
 import sys
-import traceback
 
-import dateutil
 import pandas as pd
-import pyarrow as pa
 
 import yaml
 
@@ -18,7 +14,7 @@ from historical import HistoricalMeasurements
 from recent import RecentMeasurements
 from s3 import S3API
 
-from utils import run_r_script, get_previous_week_dates, combine_dataset_rows, merge_new_data, get_current_3_hours_dates, get_previous_day_dates, get_previous_month_dates, get_previous_season_dates, get_previous_year_dates
+from utils import merge_temporal_averages_to_df, run_r_script, get_previous_week_dates, combine_dataset_rows, merge_new_data, get_current_3_hours_dates, get_previous_day_dates, get_previous_month_dates, get_previous_season_dates, get_previous_year_dates
 
 
 logging.getLogger('config').setLevel(level=logging.getLevelName(LOGLEVEL))
@@ -93,11 +89,10 @@ def main(args):
             qc = op_defn['qc'] if 'qc' in op_defn else False
 
             fetched_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-raw-measurements.csv')
-            temp_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-scratch-measurements.csv')
             final_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-measurements.csv')
 
 
-            measurements_df =  None
+            #measurements_df =  None
 
             # Fetch recent measurements from the clarity API
             # Write raw metrics (uncleaned) into the output folder
@@ -107,12 +102,12 @@ def main(args):
                 log.info(f'Fetching recent measurement data from: {CLARITY_HOSTNAME}')
                 log.info(f'    Start time: {start_time}')
 
-                # Fetch and save CSV for cleaning
+                # Fetch recent measurements and save locations from them
                 clarity = RecentMeasurements(s3api=s3api)
                 recent_measurements_df, locations_df, token = clarity.recent_fetch_metrics(start_time=start_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
                 recent_measurements_df.to_csv(fetched_data_path)
                 log.info(f'Data fetched successfully: {fetched_data_path}')
-                measurements_df = recent_measurements_df
+                #measurements_df = recent_measurements_df
                 #measurements_df = pd.read_csv(fetched_data_path) # None
 
             # Fetch recent or historical measurements from the clarity API
@@ -139,29 +134,27 @@ def main(args):
                 log.info(f'Fetching historical measurement data from: {CLARITY_HOSTNAME}')
                 log.info(f'    Start time: {start_time}')
                 log.info(f'    End time  : {end_time}')
-                #clarity = HistoricalMeasurements(s3api=s3api)
-                #report_processed = clarity.historical_fetch_metrics(start_time=start_time, end_time=end_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
 
-                # Output metrics and run post-processing
-                # historical_report_df, locations = clarity.download_report_contents(report_processed=report_processed)
-                # historical_report_df.to_csv(fetched_data_path)
-                # log.info(f'Historical data fetched successfully: {start_time} - {end_time} -> {fetched_data_path}')
-                # measurements_df = historical_report_df
-                measurements_df = pd.read_csv(fetched_data_path) # None
+                # Fetch/poll for historical measurements and save locations from them
+                clarity = HistoricalMeasurements(s3api=s3api)
+                report_processed = clarity.historical_fetch_metrics(start_time=start_time, end_time=end_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
+                historical_report_df, locations = clarity.download_report_contents(report_processed=report_processed)
+                historical_report_df.to_csv(fetched_data_path)
+                log.info(f'Historical data fetched successfully: {start_time} - {end_time} -> {fetched_data_path}')
+                #measurements_df = historical_report_df
+                #measurements_df = pd.read_csv(fetched_data_path) # None
 
             # Clean fetched measurements with R script (if provided)
             # Write raw metrics (uncleaned) into the output folder
-            if 'cleaningScript' in op_defn:
-                log.info(f'Cleaning up measurement data with R script: {op_defn["cleaningScript"]}...')
-                measurements_df = run_r_script(
-                    scriptPath=op_defn['cleaningScript'],
-                    inputFile=fetched_data_path,
-                    outputFile=temp_data_path,
-                    metricName=metric_name,
-                    minObsPerHour=op_defn['minObsPerHour'] if 'minObsPerHour' in op_defn else '1',
-                )
-            else:
-                log.info(f'Skipping data cleanup script (none defined for {metric_name})')
+            log.info(f'Cleaning up measurement data with R script: {op_defn["cleaningScript"]}...')
+            run_r_script(
+                scriptPath=op_defn['cleaningScript'],
+                inputFile=fetched_data_path,
+                metricName=metric_name,
+                minObsPerHour=op_defn['minObsPerHour'] if 'minObsPerHour' in op_defn else '1',
+            )
+
+            measurements_df = merge_temporal_averages_to_df(metric_name=metric_name, op_defn=op_defn)
 
             # Aggregate per-minute data to hourly average?
             # if outputFrequency == 'minute':
@@ -180,7 +173,7 @@ def main(args):
                     renameColumns = op_defn['postprocessing']['renameColumns']
                     measurements_df.rename(columns=renameColumns, inplace=True)
 
-            log.info(f'Postprocessing complete: {final_data_path}')
+            log.info(f'Post-processing complete: {final_data_path}')
             #log.info(f'Computing temporal averages...')
             measurements_df.to_csv(final_data_path)
 

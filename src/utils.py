@@ -179,19 +179,17 @@ def get_current_year_dates():
 def truncate(full_str: str|list[any], limit = 20):
     return f'{full_str[:limit]}...' if len(full_str) > limit else full_str
 
-def run_r_script(scriptPath: str, inputFile: str, outputFile: str, metricName: str, minObsPerHour: int):
+def run_r_script(scriptPath: str, inputFile: str, metricName: str, minObsPerHour: int):
     try:
         output = subprocess.check_output([
             'Rscript',
             scriptPath,
             metricName,
             inputFile,
-            outputFile,
             minObsPerHour
         ], universal_newlines=True, stderr=subprocess.PIPE)
         print(output.strip())
 
-        return pd.read_csv(outputFile)
     except subprocess.CalledProcessError as ex:
         log.error('R script failed. Error:', ex.stderr)
         traceback.print_exc()
@@ -204,6 +202,59 @@ def run_r_script(scriptPath: str, inputFile: str, outputFile: str, metricName: s
         log.error('ERROR: Rscript encountered an unknown exception: ', ex)
         traceback.print_exc()
         sys.exit(501)
+
+
+def merge_temporal_averages_to_df(metric_name, op_defn):
+    # TODO: hard-coded paths? is this ok?
+    renameColumns = op_defn['renameColumns'] if 'renameColumns' in op_defn else {}
+
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm25
+    log.info(f'Compiling hourly sensor data...')
+    hourly = pd.read_csv(f'data/{metric_name}-summary-hourly.csv').rename(columns=renameColumns)
+    hourly['type'] = 'hour'
+
+    # TODO: Use ISO 8601 Format indicating UTC timezone? browser needs special handling otherwise
+    # Currently using something more akin to ISO 9705
+    # hourly['date'] = hourly['date'].map(lambda d: dateutil.parser.isoparse(d).isoformat() + 'Z')
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling daily sensor data...')
+    daily = pd.read_csv(f'data/{metric_name}-summary-daily.csv').rename(columns=renameColumns)
+    daily['type'] = 'day'
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling weekly sensor data...')
+    weekly = pd.read_csv(f'data/{metric_name}-summary-weekly.csv').rename(columns=renameColumns)
+    weekly['type'] = 'week'
+
+    # Ensure date in the correct format - 2025-W10, 2025-W09, etc
+    weekly['date'] = weekly['date'].map(lambda d: d.split('-')[0] + '-W' + d.split('-')[1][1:].zfill(2))
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling monthly sensor data...')
+    monthly = pd.read_csv(f'data/{metric_name}-summary-monthly.csv').rename(columns=renameColumns)
+    monthly['type'] = 'month'
+
+    # Ensure date in the correct format - 2025-10, 2025-09, etc
+    monthly['date'] = monthly['date'].map(lambda d: d.split('-')[0] + '-' + d.split('-')[1].zfill(2))
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling seasonal sensor data...')
+    seasonal = pd.read_csv(f'data/{metric_name}-summary-seasonal.csv').rename(columns=renameColumns)
+    seasonal['type'] = 'season'
+
+    # Ensure date in the correct format - 2025-S03, 2025-S02, etc
+    seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0] + '-' + d.split('-')[1][1:].zfill(2))
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling yearly sensor data...')
+    yearly = pd.read_csv(f'data/{metric_name}-summary-yearly.csv').rename(columns=renameColumns)
+    yearly['type'] = 'year'
+
+    # Concatenate all rows of different types into single dataframe
+    return pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
+
 
 def redact(redactable: Any, key_name: str = '', limit = 20):
     if isinstance(redactable, dict):

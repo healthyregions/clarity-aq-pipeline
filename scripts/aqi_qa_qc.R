@@ -22,8 +22,7 @@ if (length(args) < 3) {
 
 metric_name <- args[1]
 input_path <- args[2]
-output_path <- args[3]
-min_obs_per_hour <- as.integer(args[4])
+min_obs_per_hour <- as.integer(args[3])
 
 col_name <- "pm2_5ConcMassNowcastUsEpaAqi.value"
 
@@ -199,26 +198,43 @@ cat("Sensor completeness summary:", nrow(sensor_hourly_comp), "sensors\n")
 print(head(sensor_hourly_comp))
 
 # Build up file name based on dataframe name + output_format (default=csv)
-# summary_completeness_file <- "summary-completeness.csv"
-
-# Merge all rows into a single dataframe
-# df_combined_final <- rbind(df_yearly, df_seasonal)
-# df_combined_final <- rbind(df_combined_final, df_monthly)
-# df_combined_final <- rbind(df_combined_final, df_weekly)
-# df_combined_final <- rbind(df_combined_final, df_daily)
-# df_combined_final <- rbind(df_combined_final, df_hourly)
-df_combined_final <- rbind(df_daily, df_hourly)
+#summary_completeness_file <- paste(raw_minute_output_dir, "mean_pm25-summary-completeness.", output_format, sep = "")
+summery_hourly_file <- paste(raw_minute_output_dir, metric_name, "-summary-hourly.", output_format, sep = "")
+summary_daily_file <- paste(raw_minute_output_dir, metric_name, "-summary-daily.", output_format, sep = "")
+summary_weekly_file <- paste(raw_minute_output_dir, metric_name, "-summary-weekly.", output_format, sep = "")
+summary_monthly_file <- paste(raw_minute_output_dir, metric_name, "-summary-monthly.", output_format, sep = "")
+summary_seasonal_file <- paste(raw_minute_output_dir, metric_name, "-summary-seasonal.", output_format, sep = "")
+summary_yearly_file <- paste(raw_minute_output_dir, metric_name, "-summary-yearly.", output_format, sep = "")
 
 # Write the chosen format to disk
-cat("Writing as OUTPUT_FORMAT=", output_format, " format: ", output_path, "\n", sep = "")
+cat("Writing as OUTPUT_FORMAT=", output_format, " format...\n", sep = "")
 if (output_format == "parquet") {
-    write_parquet(x = df_combined_final, sink = output_path)
+    #write_parquet(x = sensor_hourly_comp, sink = summary_completeness_file)
+    write_parquet(x = df_hourly, sink = summery_hourly_file)
+    write_parquet(x = df_daily, sink = summary_daily_file)
+    write_parquet(x = df_weekly, sink = summary_weekly_file)
+    write_parquet(x = df_monthly, sink = summary_monthly_file)
+    write_parquet(x = df_seasonal, sink = summary_seasonal_file)
+    write_parquet(x = df_yearly, sink = summary_yearly_file)
 } else if (output_format == "csv") {
-    write.csv(df_combined_final, output_path, row.names = FALSE)
+    #write.csv(sensor_hourly_comp, summary_completeness_file, row.names = FALSE)
+    write.csv(df_hourly, summery_hourly_file, row.names = FALSE)
+    write.csv(df_daily, summary_daily_file, row.names = FALSE)
+    write.csv(df_weekly, summary_weekly_file, row.names = FALSE)
+    write.csv(df_monthly, summary_monthly_file, row.names = FALSE)
+    write.csv(df_seasonal, summary_seasonal_file, row.names = FALSE)
+    write.csv(df_yearly, summary_yearly_file, row.names = FALSE)
 } else if (output_format == "json") {
-    jsonlite::write_json(df_combined_final, output_path, pretty = FALSE)
+    #jsonlite::write_json(sensor_hourly_comp, summary_completeness_file, pretty = FALSE)
+    jsonlite::write_json(df_hourly, summery_hourly_file, pretty = FALSE)
+    jsonlite::write_json(df_daily, summary_daily_file, pretty = FALSE)
+    jsonlite::write_json(df_weekly, summary_weekly_file, pretty = FALSE)
+    jsonlite::write_json(df_monthly, summary_monthly_file, pretty = FALSE)
+    jsonlite::write_json(df_seasonal, summary_seasonal_file, pretty = FALSE)
+    jsonlite::write_json(df_yearly, summary_yearly_file, pretty = FALSE)
 } else {
     cat("Skipping writing unknown file format: \"", output_format, "\"\n", sep = "")
 }
+
 
 cat("Data cleanup finished successfully!\n")
