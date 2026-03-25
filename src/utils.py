@@ -77,7 +77,7 @@ def get_previous_week_dates():
 #   Used for --recent --monthly
 def get_current_month_dates():
     current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    current_month_end = current_month_start + timedelta(months=1)
+    current_month_end = current_month_start + relativedelta(months=1)
 
     return isoformat(current_month_start), isoformat(current_month_end)
 
@@ -93,27 +93,26 @@ def get_previous_month_dates():
 
 
 # For simplicity, "season" is currently defined as a set of months
-#   S1 => Spring => 3/21 ~ 6/21
-#   S2 => Summer => 6/21 ~ 9/23
-#   S3 => Fall => 9/23 ~ 12/21
-#   S4 => Winter => 12/21 ~ 3/21
+#   S1 => Spring => March / April / May
+#   S2 => Summer => June / July / August
+#   S3 => Fall => September / October / November
+#   S4 => Winter => December / January / February
 def get_seasonal_boundaries(date=datetime.now(UTC)):
     month_start = date.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     month = month_start.month
     year = month_start.year
-    day_of_month = month_start.day
 
     return {
-        'S1': (datetime(year, 3, 21), datetime(year, 6, 21) - timedelta(microseconds=1)),
-        'S2': (datetime(year, 6, 21), datetime(year, 9, 23) - timedelta(microseconds=1)),
-        'S3': (datetime(year, 9, 23), datetime(year, 12, 21) - timedelta(microseconds=1)),
+        'spring': (datetime(year, 3, 1, tzinfo=UTC), datetime(year, 6, 1, tzinfo=UTC) - timedelta(microseconds=1)),
+        'summer': (datetime(year, 6, 1, tzinfo=UTC), datetime(year, 9, 1, tzinfo=UTC) - timedelta(microseconds=1)),
+        'autumn': (datetime(year, 9, 1, tzinfo=UTC), datetime(year, 12, 1, tzinfo=UTC) - timedelta(microseconds=1)),
 
         # Winter may use last year or next year
         #   month == 12 and day_of_month >= 21  =>  we are early in the winter, it will last until next year
         #   month != 12 =>  we are late in the winter, it has gone on since last year
-        'S4': (
-            datetime(year if month == 12 and day_of_month >= 21 else year - 1, 12, 21),
-            datetime(year + 1 if month == 12 and day_of_month >= 21 else year, 3, 21)  - timedelta(microseconds=1)
+        'winter': (
+            datetime(year if month == 12 else year - 1, 12, 1, tzinfo=UTC),
+            datetime(year + 1 if month == 12 else year, 3, 1, tzinfo=UTC) - timedelta(microseconds=1)
         ),
     }
 
@@ -139,17 +138,19 @@ def get_previous_season_dates():
     # Arbitrarily subtract 2 days (any number > 1 will do)
     a_day_last_season = current_season_start - timedelta(days=2)
     previous_season = get_season(date=a_day_last_season)
+    (previous_season_start, previous_season_end) = seasonal_bounds[previous_season]
 
-    return seasonal_bounds[previous_season]
+    return isoformat(previous_season_start), isoformat(previous_season_end)
 
 
 # Compute today's timestamp, use that to find first microsecond of the current season
 def get_current_season_dates():
     current_month_start = datetime.now(UTC).replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    bounds = get_seasonal_boundaries(date=current_month_start)
+    seasonal_bounds = get_seasonal_boundaries(date=current_month_start)
     current_season = get_season(date=current_month_start)
+    (current_season_start, current_season_end) = seasonal_bounds[current_season]
 
-    return bounds[current_season]
+    return isoformat(current_season_start), isoformat(current_season_end)
 
 
 # Compute today's timestamp, use that to find first microsecond of the previous year
