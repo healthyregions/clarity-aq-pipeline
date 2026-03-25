@@ -48,7 +48,7 @@ def main(args):
 
         log.info(f'Result of merge:')
         merged_df = s3api.update_locations_df(new_locations_df)
-        print(merged_df[['datasourceId','name','community','zip']][merged_df['community'] == 'ASHBURN'])
+        print(merged_df[['datasourceId','name','community','zip','ward']][merged_df['community'] == 'ASHBURN'])
 
         sys.exit(0)
 
@@ -205,8 +205,8 @@ def main(args):
             # Repeat this process for each metric
             log.info(f'Pivoting data for {metric_name}.parquet')
             new_sensor_df = pd.pivot_table(data=measurements_df, values=metric_name, index=['type', 'date'], columns=['datasourceId'], aggfunc='last', dropna=True)
-            new_sensor_df = new_sensor_df.rename(columns={'datasourceId': ''}).reset_index()
 
+            new_sensor_df = new_sensor_df.rename(columns={'datasourceId': ''}).reset_index()
 
             s3api.update_measurements_df(
                 metric_name=metric_name,
@@ -221,7 +221,7 @@ if __name__ == '__main__':
     #     Historical Measurements => startTime to endTime
     #     Recent Measurements => startTime to now
     parser.add_argument('-H', '--historical', action='store_true',
-                        help="Request a report of historical measurements between startTime and endTime (may take awhile). Defaults to previous month.")
+                        help="Request a report of historical measurements between startTime and endTime (may take awhile). Defaults to previous month. WARNING: Historical Measurement requests are expensive for the Clarity API, and are limited to ~30 requests every ~24 hours.")
     parser.add_argument('-r', '--recent', action='store_true',
                         help="Compute recent measurements data between startTime and now. Defaults to 1 hour prior to time of request.")
 
@@ -237,7 +237,7 @@ if __name__ == '__main__':
 
     # Actions to perform on the given set of measurements
     parser.add_argument('-f', '--fetch', action='store_true',
-                        help="Fetch new measurement values from Clarity REAST API V2 (may take awhile)")
+                        help="Fetch new measurement values from Clarity REST API V2 (may take awhile)")
     parser.add_argument('-c', '--clean', action='store_true',
                         help="Clean the measurement data by running the related R script, compute daily/hourly averages")
     parser.add_argument('-m', '--merge', action='store_true',
