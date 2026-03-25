@@ -46,7 +46,7 @@ def main(args):
 
     if args.locations:
         log.info(f'Merging updated location data from: {args.locations}')
-        new_locations_df = pd.read_csv(args.locations) if endswith(args.locations, 'csv') else pd.read_parquet(args.locations)
+        new_locations_df = pd.read_csv(args.locations) if endswith(args.locations, '.csv') else pd.read_parquet(args.locations)
         log.debug(new_locations_df)
 
         merged_df = s3api.update_locations_df(new_locations_df)
@@ -59,9 +59,9 @@ def main(args):
         sys.exit(0)
 
     if args.exportlocations:
-        log.info(f'Saving location data locally: {args.exportlocations}')
+        log.info(f'Saving location data locally (uncompressed): {args.exportlocations}')
         merged_df = s3api.read_dataset(df_path=f'{S3_BUCKET_NAME}/current/locations.parquet.brotli', columns=['datasourceId', 'sourceId'])
-        merged_df.to_csv(args.exportlocations, index=False)
+        merged_df.to_csv(args.exportlocations, index=False) if endswith(args.locations, '.csv') else merged_df.to_parquet(args.exportlocations)
 
         sys.exit(0)
 
