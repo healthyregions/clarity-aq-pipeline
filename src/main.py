@@ -9,7 +9,10 @@ import yaml
 
 
 from datetime import datetime, UTC
-from config import log, CLARITY_HOSTNAME, LOCAL_OUTPUT_DIR, LOGLEVEL, HISTORICAL_START_TIME, HISTORICAL_END_TIME
+
+from duckdb.experimental.spark.sql.functions import endswith
+
+from config import log, CLARITY_HOSTNAME, LOCAL_OUTPUT_DIR, LOGLEVEL, S3_BUCKET_NAME, HISTORICAL_START_TIME, HISTORICAL_END_TIME
 from historical import HistoricalMeasurements
 from recent import RecentMeasurements
 from s3 import S3API
@@ -43,12 +46,22 @@ def main(args):
 
     if args.locations:
         log.info(f'Merging updated location data from: {args.locations}')
-        new_locations_df = pd.read_parquet(args.locations)
-        print(new_locations_df)
+        new_locations_df = pd.read_csv(args.locations) if endswith(args.locations, 'csv') else pd.read_parquet(args.locations)
+        log.debug(new_locations_df)
 
-        log.info(f'Result of merge:')
         merged_df = s3api.update_locations_df(new_locations_df)
-        print(merged_df[['datasourceId','name','community','zip','ward']][merged_df['community'] == 'ASHBURN'])
+        log.info(merged_df[['datasourceId','name','community','zip','ward']][merged_df['community'] == 'ASHBURN'])
+
+        #merged_df = s3api.read_dataset(df_path=f'{S3_BUCKET_NAME}/current/locations.parquet.brotli', columns=['datasourceId', 'sourceId'])
+        #print('Saving locally...')
+        #merged_df.to_csv(args.locations, index=False)
+
+        sys.exit(0)
+
+    if args.exportlocations:
+        log.info(f'Saving location data locally: {args.exportlocations}')
+        merged_df = s3api.read_dataset(df_path=f'{S3_BUCKET_NAME}/current/locations.parquet.brotli', columns=['datasourceId', 'sourceId'])
+        merged_df.to_csv(args.exportlocations, index=False)
 
         sys.exit(0)
 
@@ -253,6 +266,8 @@ if __name__ == '__main__':
     # Manually merge in new columns to the locations dataset (e.g. community, zip, ward, etc)
     # TODO: Hopefully in the future the can be returned by Clarity's API to keep it updated and consistent
     parser.add_argument('-L', '--locations', nargs='?', default=None,
+                        help="Provide a path to a locations.parquet to merge in new columns to the locations dataset.")
+    parser.add_argument('-E', '--exportlocations', nargs='?', default=None,
                         help="Provide a path to a locations.parquet to merge in new columns to the locations dataset.")
 
     # Time-averaging functions - shorthand functions for processes that run once per week / month / season / year
