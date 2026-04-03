@@ -64,7 +64,7 @@ class S3API(object):
     # Acquire a lock for writing to the dataset
     # Use this to prevent multiple processes from writing to the dataset simultaneously
     # And don't forget to call unlock when you're done! :)
-    def lock(self, wait=False):
+    def lock(self, wait=True):
         # Check if lockfile exists
         log.debug('Acquiring lockfile...')
         lockfile_path = f'{S3_BUCKET_NAME}/.lock'
@@ -101,6 +101,29 @@ class S3API(object):
         return True
 
 
+    # Produce an index file to tell the frontend the index of the first row of each "type"
+    # WARNING: Acquire the lock BEFORE calling. This index is produced as new metrics are updated
+    def update_index(self, merged_df, metric_name):
+        df = merged_df.reset_index()
+        index_path = f'{S3_BUCKET_NAME}/current/{metric_name}.index.json'
+        log.debug(f'Writing {index_path}...')
+        index = json.dumps({
+            'hour': (df['type'] == 'hour').idxmax(),
+            'day': (df['type'] == 'day').idxmax(),
+            'week': (df['type'] == 'week').idxmax(),
+            'month': (df['type'] == 'month').idxmax(),
+            'season': (df['type'] == 'season').idxmax(),
+            'year': (df['type'] == 'year').idxmax()
+        })
+
+        try:
+            self.write_file(path=index_path, contents=index, overwrite=True)
+            log.debug(f'Successfully wrote {index_path}: {index}')
+        except Exception as e:
+            log.error(f'Failed to write index file {index_path}: {e}')
+            log.error(traceback.format_exc())
+
+
     # Given a metric name and a dataframe of new sensor data for that metric,
     #   - Acquire the lock to claim exclusive write access to the data
     #   - Merge with our existing parquet dataset, create a new one if it doesn't exist
@@ -135,6 +158,7 @@ class S3API(object):
                 merged_df = merge_new_data(existing_df=pd.DataFrame(columns=['type', 'date']), data_to_merge=new_measurements_df)
 
             self.write_file(path=metric_df_path, contents=merged_df, file_format='parquet', binary=True, overwrite=True)
+            self.update_index(metric_name=metric_name, merged_df=merged_df)
             log.info(f'Successfully updated {metric_name} dataset!')
             print(merged_df)
         except Exception as e:
