@@ -325,7 +325,7 @@ def merge_new_data(existing_df, data_to_merge):
     merged_df['date'] = merged_df['date'].astype('str')
 
     # Sort by type, then reverse sort by date for optimal retrieval of latest metrics
-    merged_df.sort_values(by=['type','date'], ascending=[True, False], inplace=True)
+    merged_df.sort_values(by=['type','date'], ascending=[False, False], inplace=True)
     return merged_df
 
 
