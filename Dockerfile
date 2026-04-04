@@ -25,7 +25,8 @@ RUN micromamba install -n base -f environment.yml -y && \
 
 # Include our Python and R source
 COPY src ./src
-COPY clarity_qa_qc.R ./clarity_qa_qc.R
+COPY scripts ./scripts
+COPY operations.yml ./operations.yml
 
 # Mount in data volume at runtime
 VOLUME /home/rstudio/data

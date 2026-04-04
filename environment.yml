@@ -12,3 +12,4 @@ dependencies:
   - pyarrow
   - python-dateutil
   - duckdb
+  - PyYAML

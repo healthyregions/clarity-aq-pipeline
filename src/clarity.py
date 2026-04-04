@@ -19,6 +19,9 @@ class ClarityAPI(object):
         #    - pm2_5ConcMassIndividual
         #    - relHumidInternalIndividual
         #    - temperatureInternalIndividual
+        # Future: NO2 / BlackCarbon needs R script support
+        #    -  + :no2 + :blackcarbon
+        # Future: AQI needs R script support to replace NowCast
         self.metricSelect = 'only + :pm25 + :internal'
 
         # Endpoint URLs / default headers for Clarity's API

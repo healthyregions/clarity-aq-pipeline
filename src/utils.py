@@ -1,14 +1,22 @@
 import json
+import os
+import subprocess
+import sys
+import traceback
 from decimal import Decimal
 
 # timedelta for microseconds/days/hours, relativedelta for months/years
 from datetime import datetime, UTC, timedelta
+from typing import Any
+
 from dateutil.relativedelta import relativedelta
 
 import duckdb
 import pandas as pd
 from pandas import DataFrame
 from pathlib import Path
+
+from config import log, LOCAL_OUTPUT_DIR
 
 # For Pandas > 3.0.0, DType==string is not yet well-supported
 pd.options.future.infer_string = False
@@ -172,7 +180,84 @@ def get_current_year_dates():
 def truncate(full_str: str|list[any], limit = 20):
     return f'{full_str[:limit]}...' if len(full_str) > limit else full_str
 
-def redact(redactable: any, key_name: str = '', limit = 20):
+def run_r_script(scriptPath: str, inputFile: str, metricName: str, minObsPerHour: int):
+    try:
+        output = subprocess.check_output([
+            'Rscript',
+            scriptPath,
+            metricName,
+            inputFile,
+            minObsPerHour
+        ], universal_newlines=True, stderr=subprocess.PIPE)
+        print(output.strip())
+
+    except subprocess.CalledProcessError as ex:
+        log.error('R script failed. Error:', ex.stderr)
+        traceback.print_exc()
+        sys.exit(500)
+    except FileNotFoundError as ex:
+        log.error('ERROR: File not found.', ex)
+        traceback.print_exc()
+        sys.exit(404)
+    except Exception as ex:
+        log.error('ERROR: Rscript encountered an unknown exception: ', ex)
+        traceback.print_exc()
+        sys.exit(501)
+
+
+def merge_temporal_averages_to_df(metric_name, op_defn):
+    # TODO: hard-coded paths? is this ok?
+    renameColumns = op_defn['renameColumns'] if 'renameColumns' in op_defn else {}
+
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm25
+    log.info(f'Compiling hourly sensor data...')
+    hourly = pd.read_csv(f'data/{metric_name}-summary-hourly.csv').rename(columns=renameColumns)
+    hourly['type'] = 'hour'
+
+    # TODO: Use ISO 8601 Format indicating UTC timezone? browser needs special handling otherwise
+    # Currently using something more akin to ISO 9705
+    # hourly['date'] = hourly['date'].map(lambda d: dateutil.parser.isoparse(d).isoformat() + 'Z')
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling daily sensor data...')
+    daily = pd.read_csv(f'data/{metric_name}-summary-daily.csv').rename(columns=renameColumns)
+    daily['type'] = 'day'
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling weekly sensor data...')
+    weekly = pd.read_csv(f'data/{metric_name}-summary-weekly.csv').rename(columns=renameColumns)
+    weekly['type'] = 'week'
+
+    # Ensure date in the correct format - 2025-W10, 2025-W09, etc
+    weekly['date'] = weekly['date'].map(lambda d: d.split('-')[0] + '-W' + d.split('-')[1][1:].zfill(2))
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling monthly sensor data...')
+    monthly = pd.read_csv(f'data/{metric_name}-summary-monthly.csv').rename(columns=renameColumns)
+    monthly['type'] = 'month'
+
+    # Ensure date in the correct format - 2025-10, 2025-09, etc
+    monthly['date'] = monthly['date'].map(lambda d: d.split('-')[0] + '-' + d.split('-')[1].zfill(2))
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling seasonal sensor data...')
+    seasonal = pd.read_csv(f'data/{metric_name}-summary-seasonal.csv').rename(columns=renameColumns)
+    seasonal['type'] = 'season'
+
+    # Ensure date in the correct format - 2025-S03, 2025-S02, etc
+    seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0] + '-' + d.split('-')[1][1:].zfill(2))
+
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
+    log.info(f'Compiling yearly sensor data...')
+    yearly = pd.read_csv(f'data/{metric_name}-summary-yearly.csv').rename(columns=renameColumns)
+    yearly['type'] = 'year'
+
+    # Concatenate all rows of different types into single dataframe
+    return pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
+
+
+def redact(redactable: Any, key_name: str = '', limit = 20):
     if isinstance(redactable, dict):
         # Create a deep copy of input object
         if key_name == '':
@@ -240,7 +325,7 @@ def merge_new_data(existing_df, data_to_merge):
     merged_df['date'] = merged_df['date'].astype('str')
 
     # Sort by type, then reverse sort by date for optimal retrieval of latest metrics
-    merged_df.sort_values(by=['type','date'], ascending=[True, False], inplace=True)
+    merged_df.sort_values(by=['type','date'], ascending=[False, False], inplace=True)
     return merged_df
 
 

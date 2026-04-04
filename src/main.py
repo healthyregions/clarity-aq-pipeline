@@ -1,13 +1,11 @@
 import argparse
 import logging
 import os
-import subprocess
 import sys
-import traceback
 
-import dateutil
 import pandas as pd
-import pyarrow as pa
+
+import yaml
 
 
 from datetime import datetime, UTC
@@ -16,7 +14,7 @@ from historical import HistoricalMeasurements
 from recent import RecentMeasurements
 from s3 import S3API
 
-from utils import get_previous_week_dates, combine_dataset_rows, merge_new_data, get_current_3_hours_dates, get_previous_day_dates, get_previous_month_dates, get_previous_season_dates, get_previous_year_dates
+from utils import merge_temporal_averages_to_df, run_r_script, get_previous_week_dates, combine_dataset_rows, merge_new_data, get_current_3_hours_dates, get_previous_day_dates, get_previous_month_dates, get_previous_season_dates, get_previous_year_dates
 
 
 logging.getLogger('config').setLevel(level=logging.getLevelName(LOGLEVEL))
@@ -68,195 +66,150 @@ def main(args):
         log.error('ERROR: please choose only one of  --recent (-r) or --historical (-H)')
         sys.exit(300)
 
-    # if args.weekly:
-    #     prev_week_start, prev_week_end = get_previous_week_dates()
-    #     log.info(f'Fetching weekly historical measurement data from: {CLARITY_HOSTNAME}')
-    #     log.info(f'    Start Time: {prev_week_start}')
-    #     log.info(f'    End time  : {prev_week_end}')
-    #
-    #     sys.exit(0)
+    if args.ops:
+        ops_defn_path = './operations.yml'
+        all_operations = ['mean_pm25', 'nowcast_aqi']
+        ops_to_run = all_operations if args.ops == '*' else args.ops
+        with open(ops_defn_path) as f:
+            operations = yaml.safe_load(f)
 
-    # Fetch recent measurements from the clarity API
-    # Write raw metrics (uncleaned) into the output folder
-    if args.fetch and args.recent:
-        start_of_3_hours, _ = get_current_3_hours_dates()
-        start_time = args.startTime if args.startTime else start_of_3_hours
-        log.info(f'Fetching recent measurement data from: {CLARITY_HOSTNAME}')
-        log.info(f'    Start time: {start_time}')
-        clarity = RecentMeasurements(s3api=s3api)
-        recent_measurements_df, locations_df, token = clarity.recent_fetch_metrics(start_time=start_time)
+        print('All known ops: ' + str(all_operations))
+        print('Now running: ' + str(ops_to_run))
+        print('Operations definitions: ' + str(operations))
 
-        # Save to CSV for cleaning
-        output_path = os.path.join(LOCAL_OUTPUT_DIR, 'raw-measurements-recent.csv')
-        recent_measurements_df.to_csv(output_path)
+        for metric_name in ops_to_run:
+            if metric_name not in operations:
+                print(f'ERROR: {metric_name} not defined in operations.yml')
+                continue
+            print('Running operation: ' + metric_name)
+            op_defn = operations[metric_name]
+            print('Definition: ' + str(op_defn))
+            metricSelect = op_defn['metricSelect']
+            outputFrequency = op_defn['outputFrequency']
+            qc = op_defn['qc'] if 'qc' in op_defn else False
 
-        log.info(f'Data fetched successfully: {output_path}')
-
-        if not args.clean:
-            log.warn('Data cleaning was skipping, so data cannot be merged. Aborting.')
-            sys.exit(22)
+            fetched_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-raw-measurements.csv')
+            final_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-measurements.csv')
 
 
-    # Fetch historical measurements from the clarity API
-    # Write raw metrics (uncleaned) into the output folder
-    if args.fetch and args.historical:
-        start_time = args.startTime if args.startTime else HISTORICAL_START_TIME
-        end_time = args.endTime if args.endTime else HISTORICAL_END_TIME
+            #measurements_df =  None
 
-        # If any helper date ranges provided, override other input methods
-        # Use largest range provided, should encompass the others
-        if args.hourly:
-            start_time, end_time = get_current_3_hours_dates()
-        if args.daily:
-            start_time, end_time = get_previous_day_dates()
-        if args.weekly:
-            start_time, end_time = get_previous_week_dates()
-        if args.monthly:
-            start_time, end_time = get_previous_month_dates()
-        if args.seasonal:
-            start_time, end_time = get_previous_season_dates()
-        if args.yearly:
-            start_time, end_time = get_previous_year_dates()
+            # Fetch recent measurements from the clarity API
+            # Write raw metrics (uncleaned) into the output folder
+            if not args.historical:
+                start_of_3_hours, _ = get_current_3_hours_dates()
+                start_time = args.startTime if args.startTime else start_of_3_hours
+                log.info(f'Fetching recent measurement data from: {CLARITY_HOSTNAME}')
+                log.info(f'    Start time: {start_time}')
 
-        log.info(f'Fetching historical measurement data from: {CLARITY_HOSTNAME}')
-        log.info(f'    Start time: {start_time}')
-        log.info(f'    End time  : {end_time}')
-        clarity = HistoricalMeasurements(s3api=s3api)
-        report_processed = clarity.historical_fetch_metrics(start_time=start_time, end_time=end_time)
+                # Fetch recent measurements and save locations from them
+                clarity = RecentMeasurements(s3api=s3api)
+                recent_measurements_df, locations_df, token = clarity.recent_fetch_metrics(start_time=start_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
+                recent_measurements_df.to_csv(fetched_data_path)
+                log.info(f'Data fetched successfully: {fetched_data_path}')
+                #measurements_df = recent_measurements_df
+                #measurements_df = pd.read_csv(fetched_data_path) # None
 
-        # Output metrics and run post-processing
-        output_path = os.path.join(LOCAL_OUTPUT_DIR, 'raw-measurements-historical.csv')
-        historical_report_df, locations = clarity.download_report_contents(report_processed=report_processed, output_path=output_path)
-        historical_report_df.to_csv(output_path)
+            # Fetch recent or historical measurements from the clarity API
+            # Write raw metrics (uncleaned) into the output folder
+            else:
+                start_time = args.startTime if args.startTime else HISTORICAL_START_TIME
+                end_time = args.endTime if args.endTime else HISTORICAL_END_TIME
 
-        log.info(f'Historical data fetched successfully: {start_time} - {end_time} -> {output_path}')
+                # If any helper date ranges provided, override other input methods
+                # Use largest range provided, should encompass the others
+                if args.hourly:
+                    start_time, end_time = get_current_3_hours_dates()
+                if args.daily:
+                    start_time, end_time = get_previous_day_dates()
+                if args.weekly:
+                    start_time, end_time = get_previous_week_dates()
+                if args.monthly:
+                    start_time, end_time = get_previous_month_dates()
+                if args.seasonal:
+                    start_time, end_time = get_previous_season_dates()
+                if args.yearly:
+                    start_time, end_time = get_previous_year_dates()
 
-        if not args.clean:
-            log.warn('Data cleaning was skipping, so data cannot be merged. Aborting.')
-            sys.exit(22)
+                log.info(f'Fetching historical measurement data from: {CLARITY_HOSTNAME}')
+                log.info(f'    Start time: {start_time}')
+                log.info(f'    End time  : {end_time}')
 
+                # Fetch/poll for historical measurements and save locations from them
+                clarity = HistoricalMeasurements(s3api=s3api)
+                report_processed = clarity.historical_fetch_metrics(start_time=start_time, end_time=end_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
+                historical_report_df, locations = clarity.download_report_contents(report_processed=report_processed)
+                historical_report_df.to_csv(fetched_data_path)
+                log.info(f'Historical data fetched successfully: {start_time} - {end_time} -> {fetched_data_path}')
+                #measurements_df = historical_report_df
+                #measurements_df = pd.read_csv(fetched_data_path) # None
 
-    # Clean fetched measurements with R script
-    # Write raw metrics (uncleaned) into the output folder
-    if args.clean:
-        log.info(f'Cleaning up measurement data with R...')
+            # Clean fetched measurements with R script (if provided)
+            # Write raw metrics (uncleaned) into the output folder
+            log.info(f'Cleaning up measurement data with R script: {op_defn["cleaningScript"]}...')
+            run_r_script(
+                scriptPath=op_defn['cleaningScript'],
+                inputFile=fetched_data_path,
+                metricName=metric_name,
+                minObsPerHour=op_defn['minObsPerHour'] if 'minObsPerHour' in op_defn else '1',
+            )
 
-        try:
-            output = subprocess.check_output([
-                'Rscript',
-                'clarity_qa_qc.R',
-                '--historical' if args.historical else '--recent'
-            ], universal_newlines=True, stderr=subprocess.PIPE)
-            print(output.strip())
-        except subprocess.CalledProcessError as ex:
-            log.error('R script failed. Error:', ex.stderr)
-            traceback.print_exc()
-            sys.exit(500)
-        except FileNotFoundError as ex:
-            log.error('ERROR: Rscript not found.', ex)
-            traceback.print_exc()
-            sys.exit(404)
-        except Exception as ex:
-            log.error('ERROR: Rscript encountered an unknown exception: ', ex)
-            traceback.print_exc()
-            sys.exit(501)
+            measurements_df = merge_temporal_averages_to_df(metric_name=metric_name, op_defn=op_defn)
 
-        if not args.merge:
-            log.warn('DRY RUN: --merge was not specified, so this will be treated as a dry run. Aborting.')
-            sys.exit(44)
+            # Aggregate per-minute data to hourly average?
+            # if outputFrequency == 'minute':
+            #     log.info(f'Computing hourly averages from per-minute data...')
+            #     measurements_df = run_r_script(
+            #         scriptPath='./scripts/scratch.R',
+            #         inputFile=temp_data_path,
+            #         outputFile=temp_data_path,
+            #         metricName=metric_name,
+            #         minObsPerHour=op_defn['minObsPerHour'] if 'minObsPerHour' in op_defn else '1',
+            #     )
 
-    # Download existing parquet files from S3, merge latest data, and output the merged parquet file
-    # TODO: ignore duplicates? or overwrite? need to pick a conflict-resolution strategy
-    if args.merge:
-        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm25
-        log.info(f'Compiling hourly sensor data...')
-        hourly = pd.read_csv('data/summary-hourly.csv').rename(columns={
-            'n_obs': 'n_valid',
-            'is_valid_hour': 'is_valid',
-            'hour': 'date',
-            'mean_pm25': 'mean_pm25',
-            # .. define new metrics here, use consistent column names for hourly + daily ... #
-        })
-        hourly['type'] = 'hour'
+            if 'postprocessing' in op_defn:
+                log.info(f'Running postprocessing for: {metric_name}...')
+                if 'renameColumns' in op_defn['postprocessing']:
+                    renameColumns = op_defn['postprocessing']['renameColumns']
+                    measurements_df.rename(columns=renameColumns, inplace=True)
 
-        # TODO: Use ISO 8601 Format indicating UTC timezone? browser needs special handling otherwise
-        # Currently using something more akin to ISO 9705
-        #hourly['date'] = hourly['date'].map(lambda d: dateutil.parser.isoparse(d).isoformat() + 'Z')
+            log.info(f'Post-processing complete: {final_data_path}')
+            #log.info(f'Computing temporal averages...')
+            measurements_df.to_csv(final_data_path)
 
-        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        log.info(f'Compiling daily sensor data...')
-        daily = pd.read_csv('data/summary-daily.csv').rename(columns={
-            'n_valid_hours': 'n_valid',
-            'is_valid_day': 'is_valid',
-            'date': 'date',
-            'daily_mean_pm25': 'mean_pm25',
-            # .. define new metrics here, use consistent column names for hourly + daily ... #
-        })
-        daily['type'] = 'day'
+            # Compute temporal averages based on hourly data
+            # measurements_df = measurements_df[['type', 'date', 'datasourceId', 'sourceId', 'nowcast_aqi']]
+            # dt_index = pd.to_datetime(measurements_df['date'])
+            # measurements_df.date.index = dt_index.map(lambda x: x.isoformat())
+            # measurements_df.set_index(['type', 'date', 'datasourceId', 'sourceId'], inplace=True)
 
-        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        log.info(f'Compiling weekly sensor data...')
-        weekly = pd.read_csv('data/summary-weekly.csv').rename(columns={
-            'n_valid_days': 'n_valid',
-            'is_valid_week': 'is_valid',
-            'week': 'date',
-            'weekly_mean_pm25': 'mean_pm25',
-            # .. define new metrics here, use consistent column names for hourly + daily ... #
-        })
-        weekly['type'] = 'week'
+            print(measurements_df)
+            #
+            # daily = (measurements_df
+            #              .groupby(['type', 'datasourceId', 'sourceId'])
+            #              .resample('D', level='date').mean())
+            # weekly = (measurements_df
+            #              .groupby(['type', 'datasourceId', 'sourceId'])
+            #              .resample('W', level='date').mean())
+            # monthly = (measurements_df
+            #              .groupby(['type', 'datasourceId', 'sourceId'])
+            #              .resample('ME', level='date').mean())
+            # yearly = (measurements_df
+            #              .groupby(['type', 'datasourceId', 'sourceId'])
+            #              .resample('YE', level='date').mean())
+            # print('Daily:', daily)
+            # print('Weekly:', weekly)
+            # print('Monthly:', monthly)
+            # print('Yearly:', yearly)
 
-        # Ensure date in the correct format - 2025-W10, 2025-W09, etc
-        weekly['date'] = weekly['date'].map(lambda d: d.split('-')[0]+'-W'+d.split('-')[1][1:].zfill(2))
+            # Repeat this process for each metric
+            log.info(f'Pivoting data for {metric_name}.parquet')
+            new_sensor_df = pd.pivot_table(data=measurements_df, values=metric_name, index=['type', 'date'], columns=['datasourceId'], aggfunc='last', dropna=True)
 
-        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        log.info(f'Compiling monthly sensor data...')
-        monthly = pd.read_csv('data/summary-monthly.csv').rename(columns={
-            'n_valid_days': 'n_valid',
-            'is_valid_month': 'is_valid',
-            'month': 'date',
-            'monthly_mean_pm25': 'mean_pm25',
-            # .. define new metrics here, use consistent column names for hourly + daily ... #
-        })
-        monthly['type'] = 'month'
-
-        # Ensure date in the correct format - 2025-10, 2025-09, etc
-        monthly['date'] = monthly['date'].map(lambda d: d.split('-')[0]+'-'+d.split('-')[1].zfill(2))
-
-
-        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        log.info(f'Compiling seasonal sensor data...')
-        seasonal = pd.read_csv('data/summary-seasonal.csv').rename(columns={
-            'n_valid_days': 'n_valid',
-            'is_valid_season': 'is_valid',
-            'season': 'date',
-            'seasonal_mean_pm25': 'mean_pm25',
-            # .. define new metrics here, use consistent column names for hourly + daily ... #
-        })
-        seasonal['type'] = 'season'
-
-        # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-        log.info(f'Compiling yearly sensor data...')
-        yearly = pd.read_csv('data/summary-yearly.csv').rename(columns={
-            'n_valid_days': 'n_valid',
-            'is_valid_season': 'is_valid',
-            'year': 'date',
-            'yearly_mean_pm25': 'mean_pm25',
-            # .. define new metrics here, use consistent column names for hourly + daily ... #
-        })
-        yearly['type'] = 'year'
-
-        # Concatenate all rows of different types into single dataframe
-        merged_sensor_df = pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
-
-        # Repeat this process process each
-        # TODO: Support other metrics?
-        for metric in ['mean_pm25']:
-            log.info(f'Pivoting data for {metric}.parquet')
-            new_sensor_df = pd.pivot_table(data=merged_sensor_df, values=metric, index=['type', 'date'], columns=['datasourceId'], aggfunc='last', dropna=True)
             new_sensor_df = new_sensor_df.rename(columns={'datasourceId': ''}).reset_index()
 
             s3api.update_measurements_df(
-                metric_name=metric,
+                metric_name=metric_name,
                 new_measurements_df=new_sensor_df,
             )
 
@@ -290,7 +243,8 @@ if __name__ == '__main__':
     parser.add_argument('-m', '--merge', action='store_true',
                         help="Merge new date into existing parquet dataset in S3 (MinIO or AWS S3)")
 
-    # Admin / Debug commands
+    # Admin / Debug
+    parser.add_argument('-o', '--ops', nargs='*', default=None, help="Run operations as defined in operations.yml")
     parser.add_argument('-b', '--backup', action='store_true',
                         help="Backup existing parquet files in S3")
     parser.add_argument('--hourly', action='store_true',

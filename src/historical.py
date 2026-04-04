@@ -15,19 +15,19 @@ from utils import redact
 class HistoricalMeasurements(ClarityAPI):
 
     # Fetch per-minute metrics from the previous month in JSON format
-    def historical_fetch_metrics(self, start_time, end_time):
+    def historical_fetch_metrics(self, start_time, end_time, metricSelect, outputFrequency = 'minute', qc=False):
         # NOTE: Historical measurements don't support locationRounding or continuationToken
         body: dict = {
             'org': self.orgName,
             'allDatasources': True,
-            'outputFrequency': 'minute',
+            'outputFrequency': outputFrequency,
             'report': 'datasource-measurements',
             'format': 'csv-wide',
             'startTime': start_time,
             'endTime': end_time,
-            'metricSelect': self.metricSelect,
-            'qcAssessment': True,
-            'qcFlags': True,
+            'metricSelect': metricSelect,
+            'qcAssessment': qc,
+            'qcFlags': qc,
         }
 
         # WARNING: the `POST /report-requests` endpoint has a limit of 30 new reports per day
@@ -65,7 +65,7 @@ class HistoricalMeasurements(ClarityAPI):
 
 
     # Given a processed report and an output_path, return a DataFrame containing the requested report data
-    def download_report_contents(self, report_processed: dict, output_path: str):
+    def download_report_contents(self, report_processed: dict):
         #report_metadata = {}
         if 'urls' not in report_processed or not report_processed['urls']:
             log.fatal(f'Monthly data fetch was not successful : No urls in processed result - {report_processed}')
