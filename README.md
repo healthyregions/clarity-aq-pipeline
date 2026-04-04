@@ -181,11 +181,13 @@ INFO:config:Successfully updated locations dataset!
 `{metric_name}.index.json` - a JSON map of `type` -> first row index where that type occurs
   * One index file for each metric tracked (`nowcast_aqi` + `mean_pm25`)
   * This is created during the `--merge` stage (see below)
-  * Index can differe between metrics, as not all metrics may have the same number of rows
+  * Index can differ between metrics, as not all metrics may have the same number of rows
 
-`{metric_name}.parquet` - contains sensor values for this metrics
+`{metric_name}.parquet.brotli` - contains sensor values for this metrics
   * One Parquet file for each metric tracked (`nowcast_aqi` + `mean_pm25`)
+  * Compressed using [BROTLI compression](https://parquet.apache.org/docs/file-format/data-pages/compression/)
   * This is created during the `--merge` stage (see below)
+  * Now sorted with latest hourly row first - this is to optimize the initial data fetch for the frontend
 ```bash
 INFO:config:Successfully updated parquet file in S3: chicago-aq/current/mean_pm25.parquet
 INFO:config:Successfully updated mean_pm25 dataset!
@@ -206,7 +208,7 @@ datasourceId   type                 date  DACZY2913  ...  DZLAV7766  DZTFU6199  
 ```
 
 
-These Parquet files are publicly available for download in our S3 bucket: LINK
+These Parquet files are publicly available for download in our S3 bucket: [mean_pm25.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/mean_pm25.parquet.brotli)  [nowcast_aqi.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/nowcast_aqi.parquet.brotli)
 
 
 ## Local Testing Using MinIO
