@@ -245,8 +245,8 @@ def merge_temporal_averages_to_df(metric_name, op_defn):
     seasonal = pd.read_csv(f'data/{metric_name}-summary-seasonal.csv').rename(columns=renameColumns)
     seasonal['type'] = 'season'
 
-    # Ensure date in the correct format - 2025-S03, 2025-S02, etc
-    seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0] + '-' + d.split('-')[1][1:].zfill(2))
+    # Ensure date in the correct format - 2025-winter, 2025-spring, etc
+    #seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0] + '-' + d.split('-')[1][1:].zfill(2))
 
     # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
     log.info(f'Compiling yearly sensor data...')
