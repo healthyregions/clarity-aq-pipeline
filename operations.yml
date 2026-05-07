@@ -42,6 +42,8 @@ clarity_pm25:
   colName: 'pm2_5ConcMass1HourMean.value'
   postprocessing:
     renameColumns:
+      outputFrequency: 'type'
+      endOfPeriod: 'date'
       #"pm2_5ConcMassNowcast.value": 'clarity_pm25'
       #"pm2_5ConcMassNowcast": 'clarity_pm25'
       #"pm2_5ConcMass1HourMean.value": 'clarity_pm25'
@@ -55,17 +57,19 @@ clarity_no2:
   colName: 'no2Conc1HourMean.value'
   postprocessing:
     renameColumns:
-      #"no2Conc1HourMean.value": 'clarity_pm25'
-      #"no2Conc1HourMean": 'clarity_pm25'
-      #"no2Conc1HourMeanUsEpaAqi.value": 'clarity_pm25'
-      #"no2Conc1HourMeanUsEpaAqi": 'clarity_pm25'
+      outputFrequency: 'type'
+      endOfPeriod: 'date'
+      #"no2Conc1HourMean.value": 'clarity_no2'
+      #"no2Conc1HourMean": 'clarity_no2'
+      #"no2Conc1HourMeanUsEpaAqi.value": 'clarity_no2'
+      #"no2Conc1HourMeanUsEpaAqi": 'clarity_no2'
 
 
 nowcast_aqi:
   outputFrequency: hour
   metricSelect: 'only *nowcast*'
-  cleaningScript: ./scripts/aqi_qa_qc.R
-
+  cleaningScript: ./scripts/clarity_qa_qc.R
+  colName: 'pm2_5ConcMassNowcastUsEpaAqi.value'
   postprocessing:
     renameColumns:
       outputFrequency: 'type'

@@ -92,7 +92,7 @@ def main(args):
             final_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-measurements.csv')
 
 
-            #measurements_df =  None
+            measurements_df = None
 
             # Fetch recent measurements from the clarity API
             # Write raw metrics (uncleaned) into the output folder

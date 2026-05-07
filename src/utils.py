@@ -181,7 +181,7 @@ def truncate(full_str: str|list[any], limit = 20):
     return f'{full_str[:limit]}...' if len(full_str) > limit else full_str
 
 def run_r_script(scriptPath: str, inputFile: str, metricName: str, minObsPerHour: int, colName: Optional[str]):
-    try:
+    #try:
         output = subprocess.check_output([
             'Rscript',
             scriptPath,
@@ -192,18 +192,18 @@ def run_r_script(scriptPath: str, inputFile: str, metricName: str, minObsPerHour
         ], universal_newlines=True, stderr=subprocess.PIPE)
         print(output.strip())
 
-    except subprocess.CalledProcessError as ex:
-        log.error('R script failed. Error:', ex.stderr)
-        traceback.print_exc()
-        sys.exit(500)
-    except FileNotFoundError as ex:
-        log.error('ERROR: File not found.', ex)
-        traceback.print_exc()
-        sys.exit(404)
-    except Exception as ex:
-        log.error('ERROR: Rscript encountered an unknown exception: ', ex)
-        traceback.print_exc()
-        sys.exit(501)
+    # except subprocess.CalledProcessError as ex:
+    #     log.error('R script failed. Error:', ex.stderr)
+    #     traceback.print_exc()
+    #     sys.exit(500)
+    # except FileNotFoundError as ex:
+    #     log.error(f'ERROR: File not found - {str(ex)}')
+    #     traceback.print_exc()
+    #     sys.exit(404)
+    # except Exception as ex:
+    #     log.error(f'ERROR: Rscript encountered an unknown exception: {str(ex)}')
+    #     traceback.print_exc()
+    #     sys.exit(501)
 
 
 def merge_temporal_averages_to_df(metric_name, op_defn):
