@@ -9,7 +9,8 @@ mean_pm25:
   cleaningScript: ./scripts/pm25_qa_qc.R
   postprocessing:
     renameColumns:
-      #"pm2_5ConcMassIndividual.raw": 'mean_pm25'
+      #"pm2_5ConcMassIndividual.value": 'mean_pm25'
+      #"pm2_5ConcMassIndividual": 'mean_pm25'
       time: 'date'
       n_obs: 'n_valid'
       is_valid: 'is_valid'
@@ -32,6 +33,33 @@ mean_pm25:
       is_valid_year: 'is_valid'
       year: 'date'
       yearly_mean_pm25: 'mean_pm25'
+
+
+clarity_pm25:
+  outputFrequency: hour
+  metricSelect: 'only :pm25'
+  cleaningScript: ./scripts/clarity_qa_qc.R
+  colName: 'pm2_5ConcMass1HourMean.value'
+  postprocessing:
+    renameColumns:
+      #"pm2_5ConcMassNowcast.value": 'clarity_pm25'
+      #"pm2_5ConcMassNowcast": 'clarity_pm25'
+      #"pm2_5ConcMass1HourMean.value": 'clarity_pm25'
+      #"pm2_5ConcMass1HourMean": 'clarity_pm25'
+
+
+clarity_no2:
+  outputFrequency: hour
+  metricSelect: 'only :no2'
+  cleaningScript: ./scripts/clarity_qa_qc.R
+  colName: 'no2Conc1HourMean.value'
+  postprocessing:
+    renameColumns:
+      #"no2Conc1HourMean.value": 'clarity_pm25'
+      #"no2Conc1HourMean": 'clarity_pm25'
+      #"no2Conc1HourMeanUsEpaAqi.value": 'clarity_pm25'
+      #"no2Conc1HourMeanUsEpaAqi": 'clarity_pm25'
+
 
 nowcast_aqi:
   outputFrequency: hour

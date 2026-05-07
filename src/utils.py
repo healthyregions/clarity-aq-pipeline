@@ -7,7 +7,7 @@ from decimal import Decimal
 
 # timedelta for microseconds/days/hours, relativedelta for months/years
 from datetime import datetime, UTC, timedelta
-from typing import Any
+from typing import Any, Optional
 
 from dateutil.relativedelta import relativedelta
 
@@ -180,14 +180,15 @@ def get_current_year_dates():
 def truncate(full_str: str|list[any], limit = 20):
     return f'{full_str[:limit]}...' if len(full_str) > limit else full_str
 
-def run_r_script(scriptPath: str, inputFile: str, metricName: str, minObsPerHour: int):
+def run_r_script(scriptPath: str, inputFile: str, metricName: str, minObsPerHour: int, colName: Optional[str]):
     try:
         output = subprocess.check_output([
             'Rscript',
             scriptPath,
             metricName,
             inputFile,
-            minObsPerHour
+            minObsPerHour,
+            colName
         ], universal_newlines=True, stderr=subprocess.PIPE)
         print(output.strip())
 
