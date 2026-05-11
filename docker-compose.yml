@@ -70,6 +70,6 @@ services:
       - ./src:/home/rstudio/src/
       - ./scripts:/home/rstudio/scripts/
     command: >
-      python ./src/main.py --recent --fetch --clean --merge
+      python ./src/main.py --recent --op nowcast_aqi clarity_pm25 clarity_no2
 
 
