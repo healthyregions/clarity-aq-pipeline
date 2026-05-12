@@ -68,7 +68,7 @@ def main(args):
 
     if args.ops:
         ops_defn_path = './operations.yml'
-        all_operations = ['mean_pm25', 'nowcast_aqi']
+        all_operations = [ 'nowcast_aqi', 'clarity_pm25', 'clarity_no2' ]
         ops_to_run = all_operations if args.ops == '*' else args.ops
         with open(ops_defn_path) as f:
             operations = yaml.safe_load(f)
@@ -92,7 +92,7 @@ def main(args):
             final_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-measurements.csv')
 
 
-            #measurements_df =  None
+            measurements_df = None
 
             # Fetch recent measurements from the clarity API
             # Write raw metrics (uncleaned) into the output folder
@@ -136,13 +136,14 @@ def main(args):
                 log.info(f'    End time  : {end_time}')
 
                 # Fetch/poll for historical measurements and save locations from them
-                clarity = HistoricalMeasurements(s3api=s3api)
-                report_processed = clarity.historical_fetch_metrics(start_time=start_time, end_time=end_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
-                historical_report_df, locations = clarity.download_report_contents(report_processed=report_processed)
-                historical_report_df.to_csv(fetched_data_path)
-                log.info(f'Historical data fetched successfully: {start_time} - {end_time} -> {fetched_data_path}')
-                #measurements_df = historical_report_df
-                #measurements_df = pd.read_csv(fetched_data_path) # None
+                if args.fetch:
+                    clarity = HistoricalMeasurements(s3api=s3api)
+                    report_processed = clarity.historical_fetch_metrics(start_time=start_time, end_time=end_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
+                    historical_report_df, locations = clarity.download_report_contents(report_processed=report_processed)
+                    historical_report_df.to_csv(fetched_data_path)
+                    log.info(f'Historical data fetched successfully: {start_time} - {end_time} -> {fetched_data_path}')
+                    #measurements_df = historical_report_df
+                    #measurements_df = pd.read_csv(fetched_data_path) # None
 
             # Clean fetched measurements with R script (if provided)
             # Write raw metrics (uncleaned) into the output folder
@@ -152,6 +153,7 @@ def main(args):
                 inputFile=fetched_data_path,
                 metricName=metric_name,
                 minObsPerHour=op_defn['minObsPerHour'] if 'minObsPerHour' in op_defn else '1',
+                colName=op_defn['colName'] if 'colName' in op_defn else None,
             )
 
             measurements_df = merge_temporal_averages_to_df(metric_name=metric_name, op_defn=op_defn)
@@ -171,7 +173,8 @@ def main(args):
                 log.info(f'Running postprocessing for: {metric_name}...')
                 if 'renameColumns' in op_defn['postprocessing']:
                     renameColumns = op_defn['postprocessing']['renameColumns']
-                    measurements_df.rename(columns=renameColumns, inplace=True)
+                    if renameColumns is not None and len(renameColumns) > 0:
+                        measurements_df.rename(columns=renameColumns, inplace=True)
 
             log.info(f'Post-processing complete: {final_data_path}')
             #log.info(f'Computing temporal averages...')
