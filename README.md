@@ -71,25 +71,25 @@ If you modify any of the source code, you will need to rebuild the image (or add
 Each of these examples will run all stages of the pipeline (see below). We provide:
 ```bash
 # Recent measurements (default: past ~3 hours)
-docker compose run --rm -it aq --recent --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --recent --op nowcast_aqi clarity_pm25 clarity_no2
 # Historical measurements (default: past full month)
-docker compose run --rm -it aq --historical  --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --historical --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 
 # Past full day (>20 valid hours)
-docker compose run --rm -it aq --historical --daily --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --historical --daily --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 # Past full week (>5 valid days)
-docker compose run --rm -it aq --historical --weekly --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --historical --weekly --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 # Past full month (>21 valid days)
-docker compose run --rm -it aq --historical --monthly --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --historical --monthly --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 # Past full season (>60 valid days)
-docker compose run --rm -it aq --historical --seasonal --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --historical --seasonal --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 # Past full year (>220 valid days)
-docker compose run --rm -it aq --historical --yearly --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --historical --yearly --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 
 # Custom date range: between 2026-01-01T00:00:00Z and now
-docker compose run --rm -it aq --recent '2026-01-01T00:00:00Z' --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --recent '2026-01-01T00:00:00Z' --op nowcast_aqi clarity_pm25 clarity_no2
 # Custom date range: between 2026-01-01T00:00:00Z and 2026-02-01T00:00:00Z
-docker compose run --rm -it aq --historical '2026-01-01T00:00:00Z' '2026-02-01T00:00:00Z' --op nowcast_aqi mean_pm25
+docker compose run --rm -it aq --historical --fetch '2026-01-01T00:00:00Z' '2026-02-01T00:00:00Z' --op nowcast_aqi clarity_pm25 clarity_no2
 ```
 
 ### Conda + Python (Local Development)
@@ -99,25 +99,26 @@ conda create -n clarity -f environment.yml
 conda activate clarity
 
 # Recent measurements (default: past ~3 hours)
-python ./main.py --recent --op nowcast_aqi mean_pm25
+python ./main.py --recent --op nowcast_aqi clarity_pm25 clarity_no2
+
 # Historical measurements (default: past full month)
-python ./main.py --historical --op nowcast_aqi mean_pm25
+python ./main.py --historical --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 
 # Past full day (>20 valid hours)
-python ./main.py --historical --daily --op nowcast_aqi mean_pm25
+python ./main.py --historical --daily --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 # Past full week (>5 valid days)
-python ./main.py --historical --weekly --op nowcast_aqi mean_pm25
+python ./main.py --historical --weekly --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 # Past full month (>21 valid days)
-python ./main.py --historical --monthly --op nowcast_aqi mean_pm25
+python ./main.py --historical --monthly --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 # Past full season (>60 valid days)
-python ./main.py --historical --seasonal --op nowcast_aqi mean_pm25
+python ./main.py --historical --seasonal --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 # Past full year (>220 valid days)
-python ./main.py --historical --yearly --op nowcast_aqi mean_pm25
+python ./main.py --historical --yearly --fetch --op nowcast_aqi clarity_pm25 clarity_no2
 
 # Custom date range: between 2026-01-01T00:00:00Z and now
-python ./main.py --recent '2026-01-01T00:00:00Z' --op nowcast_aqi mean_pm25
+python ./main.py --recent '2026-01-01T00:00:00Z' --op nowcast_aqi clarity_pm25 clarity_no2
 # Custom date range: between 2026-01-01T00:00:00Z and 2026-02-01T00:00:00Z
-python ./main.py --historical '2026-01-01T00:00:00Z' '2026-02-01T00:00:00Z' --op nowcast_aqi mean_pm25
+python ./main.py --historical --fetch '2026-01-01T00:00:00Z' '2026-02-01T00:00:00Z' --op nowcast_aqi clarity_pm25 clarity_no2
 ```
 
 
@@ -129,13 +130,15 @@ There are 2 different types of measurements we can fetch:
 ### Pipeline Operations + Stages
 There are currently 2 `operations` (parameters / indicators) defined for this pipeline:
 * `nowcast_aqi` - per-hour AQI Nowcast data from Clarity, as hourly data
-* `mean_pm25` - per-minute PM2.5 data cleaned via R script from UIC, aggregated into hourly data
+* ~~`mean_pm25`~~ - per-minute PM2.5 data cleaned via R script from UIC, aggregated into hourly data
+* `clarity_pm25` - per-hour PM2.5 data cleaned via Clarity's internal processes
+* `clarity_no2` - per-hour NO2 data cleaned via Clarity's internal processes
 
 For each operation, there are 3 (somewhat informal) stages that will always be run in a predetermined order:
 * `fetch` new measurement values from Clarity API. 
   * Also fetches and merges `locations.parquet`, since it is only returned as part of the request to fetch measurements from the API.
   * Performs and additional fetch on the Datasources API to gather the name, group, and tags for each sensor.
-  * For testing if `--fetch` is not provided, the most recently fetched measurements will be used instead.
+  * For cached testing: if `--fetch` is not provided, the most recently fetched measurements will be used instead.
 * `clean` the most recently fetched measurements using the R script
   * The `scripts/aqi_qa_qc.R` R script performs no data cleaning, and simply aggregates hourly data into daily/weekly/monthly/seasonal/yearly averages if applicable.
   * The `scripts/pm25_qa_qc.R` R script currently expects the following metrics to be part of the returned data:
@@ -233,14 +236,14 @@ S3_ENDPOINT_URL=http://localhost:9000
 Then run the same pipeline command that you would normally run.
 
 
-## Future: GitHub Action (Production)
-The production process will eventually be run automatically on a schedule, but it can be triggered manually for early testing as well.
+## GitHub Actions (Production)
+The production process is run automatically on a schedule, but it can be triggered manually for early testing as well.
 
-Navigate to https://github.com/healthyregions/clarity-aq-pipeline/actions/workflows/data-cleanup.yml
+Navigate to https://github.com/healthyregions/clarity-aq-pipeline/actions
 
-From here, you can choose to manually Run the Workflow :+1:
+From here, you can choose from the available operations on the left side to manually Run a Workflow :+1:
 
-On the right side choose "Run workflow"
+After choosing your pipeline operation, on the right side you should see a "Run workflow" button - click this!
 
 You should see a dialog open allowing you to choose which branch to run the workflow on - choose `main` unless you are working on a different branch
 
