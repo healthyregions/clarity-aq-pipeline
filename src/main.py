@@ -94,9 +94,10 @@ def main(args):
 
             measurements_df = None
 
-            # Fetch recent measurements from the clarity API
-            # Write raw metrics (uncleaned) into the output folder
+            # Fetch recent or historical measurements from the clarity API
+            # Write cloud-computed metrics (uncleaned) into the output folder
             if not args.historical:
+                # Recent Measurements
                 start_of_3_hours, _ = get_current_3_hours_dates()
                 start_time = args.startTime if args.startTime else start_of_3_hours
                 log.info(f'Fetching recent measurement data from: {CLARITY_HOSTNAME}')
@@ -110,9 +111,8 @@ def main(args):
                 #measurements_df = recent_measurements_df
                 #measurements_df = pd.read_csv(fetched_data_path) # None
 
-            # Fetch recent or historical measurements from the clarity API
-            # Write raw metrics (uncleaned) into the output folder
             else:
+                # Historical Measurements
                 start_time = args.startTime if args.startTime else HISTORICAL_START_TIME
                 end_time = args.endTime if args.endTime else HISTORICAL_END_TIME
 
@@ -145,8 +145,19 @@ def main(args):
                     #measurements_df = historical_report_df
                     #measurements_df = pd.read_csv(fetched_data_path) # None
 
+            # TODO: determine how unquoted boolean values are parsed / interpreted
+            if 'qc' in op_defn and (op_defn['qc'] == True or op_defn['qc'] == "true"):
+                # Read cloud-computed metrics (uncleaned) from the output folder
+                uncleaned_df = pd.read_csv(fetched_data_path)
+                col_name = op_defn['colName'].replace('.value', '.qcAssessment')
+
+                # Cleaning step: Remove any rows where qcAssessment is 'invalid'
+                cleaned_df = uncleaned_df[uncleaned_df[f"{col_name}"] != "invalid"]
+
+                # Write cleaned metrics back to the output folder (overwrite cloud-computed metrics)
+                cleaned_df.to_csv(fetched_data_path)
+
             # Clean fetched measurements with R script (if provided)
-            # Write raw metrics (uncleaned) into the output folder
             log.info(f'Cleaning up measurement data with R script: {op_defn["cleaningScript"]}...')
             run_r_script(
                 scriptPath=op_defn['cleaningScript'],
