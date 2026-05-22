@@ -72,6 +72,47 @@ class ClarityAPI(object):
             log.fatal('Encountered a failure while logging response error. Shutting down....')
             sys.exit(99)
 
+    def assign_groups(self, df: pd.DataFrame):
+        log.info('Assigning groups...')
+        import geopandas as gpd
+        import pandas as pd
+        from shapely.geometry import Point
+
+        # Step 1: Convert the pandas DataFrame into a GeoDataFrame
+        # GeoJSON uses longitude first (X), then latitude (Y)
+        geometry = [Point(xy) for xy in zip(df["locationLongitude"], df["locationLatitude"])]
+        gdf_locations = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
+
+        # Step 2: Load the boundary GeoJSON files
+        # Use same boundaries as the frontend, we can fetch these directly from github
+        path_prefix = 'https://raw.githubusercontent.com/healthyregions/chi-air/refs/heads/main/public/geojson/'
+        gdf_wards = gpd.read_file(f"{path_prefix}/boundaries_wards_2023_.geojson")
+        gdf_communities = gpd.read_file(f"{path_prefix}/community_areas.geojson")
+        gdf_zips = gpd.read_file(f"{path_prefix}/chiZipCodes.geojson")
+
+        # Step 3: Map your specific GeoJSON property names to target column names
+        # Ensure these match the exact keys inside your files' "properties" objects
+        gdf_wards = gdf_wards[["ward", "geometry"]]  # e.g., property is "ward"
+        gdf_communities = gdf_communities[["community", "geometry"]]  # e.g., property is "community"
+        gdf_zips = gdf_zips[["zip", "geometry"]]  # e.g., property is "zip"
+
+        # Step 4: Perform sequential spatial joins (Point-in-Polygon)
+        # "left" ensures you keep all locations even if they fall outside a boundary
+        final_gdf = gpd.sjoin(gdf_locations, gdf_wards, how="left", predicate="within")
+        final_gdf = final_gdf.drop(columns=["index_right"])  # Drop index artifact from first join
+
+        final_gdf = gpd.sjoin(final_gdf, gdf_communities, how="left", predicate="within")
+        final_gdf = final_gdf.drop(columns=["index_right"])
+
+        final_gdf = gpd.sjoin(final_gdf, gdf_zips, how="left", predicate="within")
+        final_gdf = final_gdf.drop(columns=["index_right"])
+
+        # Step 5: Clean up and save back to Parquet
+        # Drop the spatial geometry column to revert to a standard Pandas DataFrame
+        return pd.DataFrame(final_gdf).drop(columns=["geometry"])
+        #final_df = pd.DataFrame(final_gdf).drop(columns=["geometry"])
+        #final_df.to_parquet("locations_with_boundaries.parquet")
+
 
     def gather_locations(self, measurements_df):
         log.info('Gathering locations...')
@@ -92,10 +133,16 @@ class ClarityAPI(object):
         # Zip up locations + datasources using datasourceID as key, flatten + include org annotations (name/group/tags)
         subset_columns = ['datasourceId', 'currentSubscriptionId', 'currentSourceId', 'name', 'group', 'tags']
         locations_df = pd.merge(locations_df, datasources_df[subset_columns], on='datasourceId', how='left')
-        log.info('Merged locations + datasources! Writing result to S3...')
+
+        log.info('Merged locations + datasources!')
+        log.info('Assigning groups: community, zip, ward')
+        locations_df = self.assign_groups(locations_df)
+
+        log.info('Spatial groups have been assigned!')
+        log.info('Writing resulting locations dataset to S3...')
 
         sorted_df = locations_df.set_index(['datasourceId', 'sourceId']).sort_values(axis='rows', by=['datasourceId', 'sourceId']).reset_index()
-        return sorted_df[['datasourceId', 'sourceId', 'currentSourceId', 'sourceType', 'locationLatitude', 'locationLongitude', 'name', 'group', 'tags']]
+        return sorted_df[['datasourceId', 'sourceId', 'currentSourceId', 'sourceType', 'locationLatitude', 'locationLongitude', 'name', 'group', 'tags', 'community', 'ward', 'zip']]
 
 
     # Parse csv-wide Response and return CSV contents as a pandas Dataframe
