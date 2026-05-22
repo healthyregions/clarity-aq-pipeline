@@ -147,12 +147,16 @@ def main(args):
 
             # TODO: determine how unquoted boolean values are parsed / interpreted
             if 'qc' in op_defn and (op_defn['qc'] == True or op_defn['qc'] == "true"):
+                log.info(f'Purging rows with invalid qc: {op_defn["qc"]}')
+
                 # Read cloud-computed metrics (uncleaned) from the output folder
                 uncleaned_df = pd.read_csv(fetched_data_path)
                 col_name = op_defn['colName'].replace('.value', '.qcAssessment')
+                log.info(f'  Number of rows before purging={len(uncleaned_df)}')
 
                 # Cleaning step: Remove any rows where qcAssessment is 'invalid'
                 cleaned_df = uncleaned_df[uncleaned_df[f"{col_name}"] != "invalid"]
+                log.info(f'  Number of rows after purging={len(cleaned_df)}')
 
                 # Write cleaned metrics back to the output folder (overwrite cloud-computed metrics)
                 cleaned_df.to_csv(fetched_data_path)
