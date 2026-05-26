@@ -1,12 +1,41 @@
 
 # Key here determines output_dataset_name: {metric}.parquet.brotli
 
+# {metric_name}:
+#
+#   outputFrequency: 'hour'   # data temporal resolution, one of 'day', 'hour', or 'minute'
+#
+#   metricSelect: 'only :no2' # limits metrics returned. if not present, all metrics will be returned.
+#                             # see https://api-guide.clarity.io/v2/measurements/metrics-select.html
+#
+#   minObsPerHour: 1          # number of "valid" observations per hour for the hour to itself be considered "valid"
+#
+#   qc: true                  # if true, fetch qcFlags + qcAssessment for further review/cleaning
+#                             # this is needed for us to discard invalid datapoints
+#
+#   cleaningScript: path/to/script.R
+#                             # the R cleaning script that should be run for this data.
+#                             # for hourly cloud-computed metrics, we can use clarity_qa_qc.R
+#
+#   colName: 'no2Conc1HourMean.value'
+#                             # if using clarity_qa_qc.R or if qc=true, you must provide the name of the column that contains the desired metrics.
+#
+#   postprocessing:           # define any postprocessing steps for this data
+#                             # sometimes this is just a precaution, and sometimes this is necessary
+#
+#     renameColumns:          # renames "current_column_name" to "desired_column_name"
+#       current_column_name: desired_column_name
+#
+
+
+# TODO: currently unused - pending additional data cleanup support from UIC
 mean_pm25:
   outputFrequency: minute
   metricSelect: 'only :pm25 + :internal'
   minObsPerHour: '3'
-  qc: true
   cleaningScript: ./scripts/pm25_qa_qc.R
+  colName: 'pm2_5ConcMassIndividual.value'
+  qc: true
   postprocessing:
     renameColumns:
       #"pm2_5ConcMassIndividual.value": 'mean_pm25'
@@ -40,6 +69,7 @@ clarity_pm25:
   metricSelect: 'only :pm25'
   cleaningScript: ./scripts/clarity_qa_qc.R
   colName: 'pm2_5ConcMass1HourMean.value'
+  qc: true
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
@@ -55,6 +85,7 @@ clarity_no2:
   metricSelect: 'only :no2'
   cleaningScript: ./scripts/clarity_qa_qc.R
   colName: 'no2Conc1HourMean.value'
+  qc: true
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
@@ -70,6 +101,7 @@ nowcast_aqi:
   metricSelect: 'only *nowcast*'
   cleaningScript: ./scripts/clarity_qa_qc.R
   colName: 'pm2_5ConcMassNowcastUsEpaAqi.value'
+  qc: true
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
@@ -78,4 +110,4 @@ nowcast_aqi:
       #'pm2_5ConcMassNowcastUsEpaAqi': 'nowcast_aqi'
 
 
-# Future: ... define new operations for NO2 + Black Carbon ...
+# Future: ... define new operations for Black Carbon ...
