@@ -124,27 +124,38 @@ python ./main.py --historical --fetch '2026-01-01T00:00:00Z' '2026-02-01T00:00:0
 
 ## Modes of Operation
 There are 2 different types of measurements we can fetch:
-* `--historical` Measurements occurred between start time and end time
-* `--recent` Measurements occurred between start time and now
+* `--recent` (default): gathers measurements from start time to now
+* `--historical`: gathers measurements from start time to end time
 
-### Pipeline Operations + Stages
-There are currently 2 `operations` (parameters / indicators) defined for this pipeline:
+### Optional Arguments
+There are a few optional arguments you can use to change how the pipeline runs
+
+Some apply to all situations, and some are case-specific:
+* `--fetch`: if provided, fetch new metrics. otherwise latest/cached metrics will be used. We almost always use `--fetch`, but it can be helpful when debugging to use the cache instead
+* `--weekly` Measurements occurred between start time and end time
+
+### Required Arguments
+* `--op` provides a list of operations to run. This is a list of metric names (see below), for example: `--op nowcast_aqi clarity_no2`
+
+There are currently 3 `operations` (parameters / indicators) defined for this pipeline:
 * `nowcast_aqi` - per-hour AQI Nowcast data from Clarity, as hourly data
-* ~~`mean_pm25`~~ - per-minute PM2.5 data cleaned via R script from UIC, aggregated into hourly data
+* ~~`mean_pm25`~~ - per-minute PM2.5 data cleaned via R script from UIC, aggregated into hourly data (currently awaiting a new cleanup script)
 * `clarity_pm25` - per-hour PM2.5 data cleaned via Clarity's internal processes
 * `clarity_no2` - per-hour NO2 data cleaned via Clarity's internal processes
 
-For each operation, there are 3 (somewhat informal) stages that will always be run in a predetermined order:
-* `fetch` new measurement values from Clarity API. 
-  * Also fetches and merges `locations.parquet`, since it is only returned as part of the request to fetch measurements from the API.
-  * Performs and additional fetch on the Datasources API to gather the name, group, and tags for each sensor.
-  * For cached testing: if `--fetch` is not provided, the most recently fetched measurements will be used instead.
+For each operation/metric, there are 3 (somewhat informal) stages that will always be run in a predetermined order:
+* `fetch` new measurement values from Clarity API
+  * Also fetches and merges `locations.parquet`, since it is only returned as part of the request to fetch measurements from the API
+  * Performs and additional fetch on the Datasources API to gather the name, group, and tags for each sensor
+  * This stage produces a CSV file containing the newly-fetched raw/uncleaned metric data: `{metric_name}-raw-measurements.csv`
+  * For cached testing: if `--fetch` is not provided, the most recently fetched measurements will be used instead
 * `clean` the most recently fetched measurements using the R script
-  * The `scripts/aqi_qa_qc.R` R script performs no data cleaning, and simply aggregates hourly data into daily/weekly/monthly/seasonal/yearly averages if applicable.
-  * The `scripts/pm25_qa_qc.R` R script currently expects the following metrics to be part of the returned data:
+  * The `scripts/aqi_qa_qc.R` R script performs no data cleaning, and simply aggregates hourly data into daily/weekly/monthly/seasonal/yearly averages if applicable
+  * The `scripts/pm25_qa_qc.R` R script is not currently being used, but it would expect the following metrics to be part of the returned data:
     * `pm2_5ConcMassIndividual`
     * `relHumidInternalIndividual`
     * `temperatureInternalIndividual`
+  * This stage expects `qc` values to be provided. We examine these to discard results that are marked as `invalid`
   * Validity Thresholds - averages will be disregarded if they do not meet these minimums
     * `hourly`: >=75% completeness to qualify as a valid hourly average
     * `daily`: >20 valid hours to qualify as a valid daily average
@@ -152,8 +163,12 @@ For each operation, there are 3 (somewhat informal) stages that will always be r
     * `monthly`: >21 valid days to qualify as a valid monthly average
     * `seasonal`: >60 valid days to qualify as a valid seasonal average
     * `yearly`: >220 valid days to qualify as a valid yearly average
+  * This stage produces a CSV file containing the cleaned metric data: `{metric_name}-measurements.csv`
 * `merge` the cleaned measurements into the Parquet dataset in S3
-    * This stage produces a `{metric_name}.index.json` file that gives the first row index of each `type` (e.g. index of first hour, index of first day, etc)
+    * This stage merges the cleaned measurements from above into the existing dataset in S3
+    * For local development, you can use MinIO instead of S3 (see "Local Testing Using MinIO" below)
+    * This stage produces a small JSON file named `{metric_name}.index.json`
+    * This file provides the first row index of each `type` (e.g. index of first hour, index of first day, etc)
 
 ### Resulting S3 Files
 Various Parquet datasets are produced by this process. If these files exist, their contents will be merged with any updated data received.
@@ -162,6 +177,7 @@ Various Parquet datasets are produced by this process. If these files exist, the
 
 `locations.parquet` - contains sensor lat/long, names, groups, tags, zip*, neighborhood*, ward*
   * \* denotes a column that was manually added - these columns are not returned by the Clarity API
+  * To optimize loading/querying in the frontend, Parquet file is compressed using [BROTLI compression](https://parquet.apache.org/docs/file-format/data-pages/compression/)
   * This is created during the `--fetch` stage (see below)
 ```bash
 INFO:config:Successfully updated locations dataset!
@@ -182,15 +198,15 @@ INFO:config:Successfully updated locations dataset!
 ```
 
 `{metric_name}.index.json` - a JSON map of `type` -> first row index where that type occurs
-  * One index file for each metric tracked (`nowcast_aqi` + `mean_pm25`)
+  * One index file for each metric tracked (`nowcast_aqi` + `clarity_pm25` + `clarity_no2`)
   * This is created during the `--merge` stage (see below)
   * Index can differ between metrics, as not all metrics may have the same number of rows
 
-`{metric_name}.parquet.brotli` - contains sensor values for this metrics
-  * One Parquet file for each metric tracked (`nowcast_aqi` + `mean_pm25`)
-  * Compressed using [BROTLI compression](https://parquet.apache.org/docs/file-format/data-pages/compression/)
+`{metric_name}.parquet.brotli` - contains sensor values for this metric
+  * One Parquet file for each metric tracked (`nowcast_aqi` + `clarity_pm25` + `clarity_no2`)
+  * To optimize loading/querying in the frontend, Parquet file is compressed using [BROTLI compression](https://parquet.apache.org/docs/file-format/data-pages/compression/)
   * This is created during the `--merge` stage (see below)
-  * Now sorted with latest hourly row first - this is to optimize the initial data fetch for the frontend
+  * Now sorted with latest hourly row first - optimal for the initial data fetch for the frontend dashboard
 ```bash
 INFO:config:Successfully updated parquet file in S3: chicago-aq/current/mean_pm25.parquet
 INFO:config:Successfully updated mean_pm25 dataset!
@@ -210,8 +226,10 @@ datasourceId   type                 date  DACZY2913  ...  DZLAV7766  DZTFU6199  
 [986 rows x 281 columns]
 ```
 
-
-These Parquet files are publicly available for download in our S3 bucket: [mean_pm25.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/mean_pm25.parquet.brotli)  [nowcast_aqi.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/nowcast_aqi.parquet.brotli)
+These Parquet files are publicly available for download in our S3 bucket:
+* [nowcast_aqi.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/nowcast_aqi.parquet.brotli)
+* [clarity_pm25.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/clarity_pm25.parquet.brotli)
+* [clarity_no2.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/clarity_no2.parquet.brotli)
 
 
 ## Local Testing Using MinIO
