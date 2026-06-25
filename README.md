@@ -143,6 +143,7 @@ There are currently 3 `operations` (parameters / indicators) defined for this pi
 * `clarity_pm25` - per-hour PM2.5 data cleaned via Clarity's internal processes
 * `clarity_no2` - per-hour NO2 data cleaned via Clarity's internal processes
 
+#### Operation Stages: `fetch`, `clean`, and `merge`
 For each operation/metric, there are 3 (somewhat informal) stages that will always be run in a predetermined order:
 * `fetch` new measurement values from Clarity API
   * Also fetches and merges `locations.parquet`, since it is only returned as part of the request to fetch measurements from the API
