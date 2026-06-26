@@ -210,6 +210,8 @@ def merge_temporal_averages_to_df(metric_name, op_defn):
     # TODO: hard-coded paths? is this ok?
     renameColumns = op_defn['renameColumns'] if 'renameColumns' in op_defn else {}
 
+    # TODO: parameterize this in op defn?
+    decimals = 0 if metric_name == 'nowcast_aqi' else 1
 
     # Ensure column consistency: n_valid, type, date, is_valid, mean_pm25
     log.info(f'Compiling hourly sensor data...')
@@ -221,38 +223,59 @@ def merge_temporal_averages_to_df(metric_name, op_defn):
     # hourly['date'] = hourly['date'].map(lambda d: dateutil.parser.isoparse(d).isoformat() + 'Z')
 
     # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-    log.info(f'Compiling daily sensor data...')
-    daily = pd.read_csv(f'data/{metric_name}-summary-daily.csv').rename(columns=renameColumns)
+    log.info(f'Computing temporal averages for all sensors...')
+    daily = pd.read_csv(f'data/{metric_name}-summary-daily.csv')
+    weekly = pd.read_csv(f'data/{metric_name}-summary-weekly.csv')
+    monthly = pd.read_csv(f'data/{metric_name}-summary-monthly.csv')
+    seasonal = pd.read_csv(f'data/{metric_name}-summary-seasonal.csv')
+    yearly = pd.read_csv(f'data/{metric_name}-summary-yearly.csv')
+
+    ######################
+    # Inject type column #
+    ######################
+    log.info(f'Injecting "type" column...')
     daily['type'] = 'day'
-
-    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-    log.info(f'Compiling weekly sensor data...')
-    weekly = pd.read_csv(f'data/{metric_name}-summary-weekly.csv').rename(columns=renameColumns)
     weekly['type'] = 'week'
+    monthly['type'] = 'month'
+    seasonal['type'] = 'season'
+    yearly['type'] = 'year'
 
+    ###########################
+    # Date format corrections #
+    ###########################
+    log.info(f'Applying consistent format for weekly/monthly dates...')
     # Ensure date in the correct format - 2025-W10, 2025-W09, etc
     weekly['date'] = weekly['date'].map(lambda d: d.split('-')[0] + '-W' + d.split('-')[1][1:].zfill(2))
-
-    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-    log.info(f'Compiling monthly sensor data...')
-    monthly = pd.read_csv(f'data/{metric_name}-summary-monthly.csv').rename(columns=renameColumns)
-    monthly['type'] = 'month'
 
     # Ensure date in the correct format - 2025-10, 2025-09, etc
     monthly['date'] = monthly['date'].map(lambda d: d.split('-')[0] + '-' + d.split('-')[1].zfill(2))
 
-    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-    log.info(f'Compiling seasonal sensor data...')
-    seasonal = pd.read_csv(f'data/{metric_name}-summary-seasonal.csv').rename(columns=renameColumns)
-    seasonal['type'] = 'season'
+    ###########################
+    # Consistent rounding     #
+    ###########################
+    log.info(f'Applying consistent rounding for all averages...')
+    # Round averages to 0 or 1 decimal places
+    if not daily.empty:
+        daily = daily.round(decimals=decimals)
+    if not weekly.empty:
+        weekly = weekly.round(decimals=decimals)
+    if not monthly.empty:
+        monthly = monthly.round(decimals=decimals)
+    if not seasonal.empty:
+        seasonal = seasonal.round(decimals=decimals)
+    if not yearly.empty:
+        yearly = yearly.round(decimals=decimals)
 
-    # Ensure date in the correct format - 2025-winter, 2025-spring, etc
-    #seasonal['date'] = seasonal['date'].map(lambda d: d.split('-')[0] + '-' + d.split('-')[1][1:].zfill(2))
-
-    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm2
-    log.info(f'Compiling yearly sensor data...')
-    yearly = pd.read_csv(f'data/{metric_name}-summary-yearly.csv').rename(columns=renameColumns)
-    yearly['type'] = 'year'
+    ###########################
+    # Column name consistency #
+    ###########################
+    log.info(f'Renaming columns based on operation definition...')
+    # Ensure column consistency: n_valid, type, date, is_valid, mean_pm25
+    daily.rename(columns=renameColumns, inplace=True)
+    weekly.rename(columns=renameColumns, inplace=True)
+    monthly.rename(columns=renameColumns, inplace=True)
+    seasonal.rename(columns=renameColumns, inplace=True)
+    yearly.rename(columns=renameColumns, inplace=True)
 
     # Concatenate all rows of different types into single dataframe
     return pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
