@@ -93,7 +93,7 @@ class ClarityAPI(object):
         # Step 3: Map your specific GeoJSON property names to target column names
         # Ensure these match the exact keys inside your files' "properties" objects
         gdf_wards = gdf_wards[["ward", "geometry"]]  # e.g., property is "ward"
-        gdf_communities = gdf_communities[["community", "geometry"]]  # e.g., property is "community"
+        gdf_communities = gdf_communities[["community", "area_num_1", "geometry"]]  # e.g., properties are "community" (name) + "area_num_1" (comm area #)
         gdf_zips = gdf_zips[["zip", "geometry"]]  # e.g., property is "zip"
 
         # Step 4: Perform sequential spatial joins (Point-in-Polygon)
