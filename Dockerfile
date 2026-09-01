@@ -7,6 +7,13 @@ RUN ln -s -f /usr/bin/python3 /usr/bin/python && \
     apt-get install -y vim curl wget bzip2 ca-certificates && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+    
+# Copy the Lambda Web Adapter binary into your container
+COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.8.4 /lambda-adapter /opt/extensions/lambda-adapter
+
+# Port the Web Adapter will route traffic to inside your container (default is 8080)
+ENV PORT=8080
+EXPOSE 8080
 
 # Install micromamba
 RUN curl -L micro.mamba.pm/install.sh | bash -s -- -y
