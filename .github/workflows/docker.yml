@@ -75,12 +75,11 @@ jobs:
 
       # Gather Docker metadata based on trigger type, org, repo, sha
       - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v4
+        id: ghcr-meta
+        uses: docker/metadata-action@v5
         with:
           images: |
             ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
-            ${{ steps.login-ecr.outputs.registry }}/our-air/clarity-aq-pipeline
           tags: |
             # set latest tag for default branch
             type=raw,value=latest,enable={{is_default_branch}}
@@ -90,16 +89,42 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
 
+      # Gather Docker metadata based on trigger type, org, repo, sha
+      - name: Docker meta
+        id: ecr-meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            ${{ steps.login-ecr.outputs.registry }}/our-air/clarity-aq-pipeline
+          tags: |
+            # set latest tag for default branch
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # Push Docker image to GHCR for internal testing and review
       - name: Build and push Docker image
-        uses: docker/build-push-action@v5
+        id: ghcr-push
+        uses: docker/build-push-action@v6
         with:
           # Path to your Dockerfile context
           context: .
           platforms: linux/amd64   # need to investigate support for arm64, if desirable
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.ghcr-meta.outputs.tags }}
+          labels: ${{ steps.ghcr-meta.outputs.labels }}
 
+      # Push same image to AWS ECR for running the production tasks on a schedule
+      - name: Build and push Docker image
+        id: ecr-push
+        uses: docker/build-push-action@v6
+        with:
+          # Path to your Dockerfile context
+          context: .
+          platforms: linux/amd64   # need to investigate support for arm64, if desirable
+          push: true
+          tags: ${{ steps.ecr-meta.outputs.tags }}
+          labels: ${{ steps.ecr-meta.outputs.labels }}
