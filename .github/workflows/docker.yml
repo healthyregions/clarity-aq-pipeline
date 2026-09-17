@@ -36,6 +36,11 @@ on:
       - published
       - edited
       - created
+      
+permissions:
+  id-token: write   # Required for OIDC token request
+  contents: read
+  packages: write  # Only needed if also pushing to GHCR
 
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
