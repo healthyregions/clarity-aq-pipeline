@@ -100,7 +100,7 @@ jobs:
         with:
           # Path to your Dockerfile context
           context: .
-          platforms: linux/amd64,linux/arm64   # explicitly declare both arch
+          platforms: linux/amd64   # need to investigate support for arm64, if desirable
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
