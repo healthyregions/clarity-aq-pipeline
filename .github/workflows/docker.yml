@@ -61,7 +61,7 @@ jobs:
 
       # AWS / ECR authentication
       - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4 # More information on this action can be found below in the 'AWS Credentials' section
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ vars.AWS_ROLE_ARN }}
           aws-region: us-east-2
@@ -95,6 +95,7 @@ jobs:
         with:
           # Path to your Dockerfile context
           context: .
+          platforms: linux/amd64,linux/arm64   # explicitly declare both arch
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
