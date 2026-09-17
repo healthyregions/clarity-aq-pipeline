@@ -29,6 +29,9 @@ on:
   # Trigger the workflow when a pull request is created or updated
   pull_request:
 
+  # Allow us to manually trigger a new image build
+  workflow_dispatch: 
+
   # Trigger the workflow on release activity
   release:
     # Only use the types keyword to narrow down the activity types that will trigger your workflow.
