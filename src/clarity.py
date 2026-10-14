@@ -85,6 +85,7 @@ class ClarityAPI(object):
 
         # Step 2: Load the boundary GeoJSON files
         # Use same boundaries as the frontend, we can fetch these directly from github
+        # TODO: should we cache this? are we at risk for ratelimiting?
         path_prefix = 'https://raw.githubusercontent.com/healthyregions/chi-air/refs/heads/main/public/geojson/'
         gdf_wards = gpd.read_file(f"{path_prefix}/boundaries_wards_2023_.geojson")
         gdf_communities = gpd.read_file(f"{path_prefix}/community_areas.geojson")
@@ -93,8 +94,9 @@ class ClarityAPI(object):
         # Step 3: Map your specific GeoJSON property names to target column names
         # Ensure these match the exact keys inside your files' "properties" objects
         gdf_wards = gdf_wards[["ward", "geometry"]]  # e.g., property is "ward"
-        gdf_communities = gdf_communities[["community", "area_num_1", "geometry"]]  # e.g., properties are "community" (name) + "area_num_1" (comm area #)
+        gdf_communities = gdf_communities[["community", "area_numbe", "geometry"]]  # "community" => name, "area_numbe" => area number
         gdf_zips = gdf_zips[["zip", "geometry"]]  # e.g., property is "zip"
+        gdf_communities.rename(columns={'area_numbe': 'comarea'}, inplace=True)
 
         # Step 4: Perform sequential spatial joins (Point-in-Polygon)
         # "left" ensures you keep all locations even if they fall outside a boundary
@@ -135,14 +137,14 @@ class ClarityAPI(object):
         locations_df = pd.merge(locations_df, datasources_df[subset_columns], on='datasourceId', how='left')
 
         log.info('Merged locations + datasources!')
-        log.info('Assigning groups: community, zip, ward')
+        log.info('Assigning groups: community, comarea, zip, ward')
         locations_df = self.assign_groups(locations_df)
 
         log.info('Spatial groups have been assigned!')
         log.info('Writing resulting locations dataset to S3...')
 
         sorted_df = locations_df.set_index(['datasourceId', 'sourceId']).sort_values(axis='rows', by=['datasourceId', 'sourceId']).reset_index()
-        return sorted_df[['datasourceId', 'sourceId', 'currentSourceId', 'sourceType', 'locationLatitude', 'locationLongitude', 'name', 'group', 'tags', 'community', 'ward', 'zip']]
+        return sorted_df[['datasourceId', 'sourceId', 'currentSourceId', 'sourceType', 'locationLatitude', 'locationLongitude', 'name', 'group', 'tags', 'community', 'comarea', 'ward', 'zip']]
 
 
     # Parse csv-wide Response and return CSV contents as a pandas Dataframe
