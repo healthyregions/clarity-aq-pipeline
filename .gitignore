@@ -198,3 +198,5 @@ cython_debug/
 
 # Avoid storing our actual output files in git
 data/
+
+.ignored/

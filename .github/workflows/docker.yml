@@ -23,6 +23,7 @@ on:
       - 'environment.yml'
       - 'src/**'
       - '**/*.R'
+      - 'operations.yml'
     branches:
       - main
 

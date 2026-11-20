@@ -69,6 +69,7 @@ services:
       - ./data:/home/rstudio/data/
       - ./src:/home/rstudio/src/
       - ./scripts:/home/rstudio/scripts/
+      - ./operations.yml:/home/rstudio/operations.yml
     command: >
       python ./src/main.py --recent --op nowcast_aqi clarity_pm25 clarity_no2
 

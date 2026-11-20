@@ -9,7 +9,8 @@ import yaml
 
 
 from datetime import datetime, UTC
-from config import log, CLARITY_HOSTNAME, LOCAL_OUTPUT_DIR, LOGLEVEL, HISTORICAL_START_TIME, HISTORICAL_END_TIME
+from airnow import AirNowAPI
+from config import log, AIRNOW_HOSTNAME, CLARITY_HOSTNAME, LOCAL_OUTPUT_DIR, LOGLEVEL, HISTORICAL_START_TIME, HISTORICAL_END_TIME
 from historical import HistoricalMeasurements
 from recent import RecentMeasurements
 from s3 import S3API
@@ -27,6 +28,21 @@ logging.getLogger('botocore.hooks').setLevel(level=logging.INFO)
 
 # Workaround(?) for _duckdb.NotImplementedException: Not implemented Error: Data type 'str' not recognized
 pd.options.future.infer_string = False
+
+
+# Fetch hourly AirNow observations for an operation defined with `source: airnow` in operations.yml
+def fetch_airnow_metrics(s3api, op_defn, start_time, end_time):
+    fields = op_defn.get('airnowFields', ['Value'])
+    if isinstance(fields, str):
+        fields = [fields]
+    airnow = AirNowAPI(s3api=s3api)
+    return airnow.fetch_metrics(
+        start_time=start_time,
+        end_time=end_time,
+        parameter=op_defn['airnowParameter'],
+        fields=fields,
+        col_name=op_defn['colName'],
+    )
 
 
 def main(args):
@@ -68,7 +84,7 @@ def main(args):
 
     if args.ops:
         ops_defn_path = './operations.yml'
-        all_operations = [ 'nowcast_aqi', 'clarity_pm25', 'clarity_no2' ]
+        all_operations = [ 'nowcast_aqi', 'clarity_pm25', 'clarity_no2', 'airnow_aqi', 'airnow_pm25', 'airnow_no2' ]
         ops_to_run = all_operations if args.ops == '*' else args.ops
         with open(ops_defn_path) as f:
             operations = yaml.safe_load(f)
@@ -84,9 +100,11 @@ def main(args):
             print('Running operation: ' + metric_name)
             op_defn = operations[metric_name]
             print('Definition: ' + str(op_defn))
-            metricSelect = op_defn['metricSelect']
+            metricSelect = op_defn.get('metricSelect')
             outputFrequency = op_defn['outputFrequency']
             qc = op_defn['qc'] if 'qc' in op_defn else False
+            # Data source for this operation: 'clarity' (default) or 'airnow' (US EPA AirNow API)
+            source = str(op_defn.get('source', 'clarity')).lower()
 
             fetched_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-raw-measurements.csv')
             final_data_path = os.path.join(LOCAL_OUTPUT_DIR, metric_name + '-measurements.csv')
@@ -100,12 +118,15 @@ def main(args):
                 # Recent Measurements
                 start_of_3_hours, _ = get_current_3_hours_dates()
                 start_time = args.startTime if args.startTime else start_of_3_hours
-                log.info(f'Fetching recent measurement data from: {CLARITY_HOSTNAME}')
+                log.info(f'Fetching recent measurement data from: {AIRNOW_HOSTNAME if source == "airnow" else CLARITY_HOSTNAME}')
                 log.info(f'    Start time: {start_time}')
 
                 # Fetch recent measurements and save locations from them
-                clarity = RecentMeasurements(s3api=s3api)
-                recent_measurements_df, locations_df, token = clarity.recent_fetch_metrics(start_time=start_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
+                if source == 'airnow':
+                    recent_measurements_df, locations_df = fetch_airnow_metrics(s3api=s3api, op_defn=op_defn, start_time=start_time, end_time=None)
+                else:
+                    clarity = RecentMeasurements(s3api=s3api)
+                    recent_measurements_df, locations_df, token = clarity.recent_fetch_metrics(start_time=start_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
                 recent_measurements_df.to_csv(fetched_data_path)
                 log.info(f'Data fetched successfully: {fetched_data_path}')
                 #measurements_df = recent_measurements_df
@@ -131,12 +152,16 @@ def main(args):
                 if args.yearly:
                     start_time, end_time = get_previous_year_dates()
 
-                log.info(f'Fetching historical measurement data from: {CLARITY_HOSTNAME}')
+                log.info(f'Fetching historical measurement data from: {AIRNOW_HOSTNAME if source == "airnow" else CLARITY_HOSTNAME}')
                 log.info(f'    Start time: {start_time}')
                 log.info(f'    End time  : {end_time}')
 
                 # Fetch/poll for historical measurements and save locations from them
-                if args.fetch:
+                if args.fetch and source == 'airnow':
+                    historical_df, locations = fetch_airnow_metrics(s3api=s3api, op_defn=op_defn, start_time=start_time, end_time=end_time)
+                    historical_df.to_csv(fetched_data_path)
+                    log.info(f'Historical AirNow data fetched successfully: {start_time} - {end_time} -> {fetched_data_path}')
+                elif args.fetch:
                     clarity = HistoricalMeasurements(s3api=s3api)
                     report_processed = clarity.historical_fetch_metrics(start_time=start_time, end_time=end_time, metricSelect=metricSelect, outputFrequency=outputFrequency, qc=qc)
                     historical_report_df, locations = clarity.download_report_contents(report_processed=report_processed)
