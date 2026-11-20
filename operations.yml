@@ -135,7 +135,7 @@ airnow_aqi:
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
-      endOfPeriod: 'date'
+      startOfPeriod: 'date'
 
 
 # Comparable to clarity_pm25 (pm2_5ConcMass1HourMean, ug/m3)
@@ -150,7 +150,7 @@ airnow_pm25:
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
-      endOfPeriod: 'date'
+      startOfPeriod: 'date'
 
 
 # Comparable to clarity_no2 (no2Conc1HourMean, ppb)
@@ -165,7 +165,7 @@ airnow_no2:
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
-      endOfPeriod: 'date'
+      startOfPeriod: 'date'
 
 
 # Future: ... define new operations for Black Carbon ...

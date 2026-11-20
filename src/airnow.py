@@ -7,8 +7,8 @@
 #   locationLatitude, locationLongitude, <colName>
 #
 # Time convention: AirNow's `UTC` field is the BEGINNING of the 1-hour averaging period.
-# Clarity labels each hour by its END (endOfPeriod), and the R script floors endOfPeriod
-# to the hour, so we emit endOfPeriod = UTC + 1h to keep hour labels aligned between sources.
+# Both sources label each hour by its start: the R script floors startOfPeriod to the hour,
+# so we emit startOfPeriod = UTC. endOfPeriod (= UTC + 1h) is just the exclusive period end.
 
 import sys
 from datetime import datetime, timedelta, UTC
@@ -64,13 +64,16 @@ class AirNowAPI(object):
         self.s3api = s3api
         self.dataUrl = f'{AIRNOW_HOSTNAME}/aq/data/'
 
-    # Returns the range of hour-beginning timestamps whose endOfPeriod falls in [start_time, end_time)
+    # Returns the range of hour-beginning timestamps (startOfPeriod) that fall in [start_time, end_time),
+    # limited to hours that have already finished (an hour still in progress is never requested)
     @staticmethod
     def hour_range(start_time, end_time):
+        now = datetime.now(UTC)
         start = _parse_time(start_time)
-        end = _parse_time(end_time) if end_time else datetime.now(UTC)
-        first_begin = _ceil_hour(start - timedelta(hours=1))
-        last_begin = _floor_hour(end - timedelta(hours=1) - timedelta(microseconds=1))
+        end = _parse_time(end_time) if end_time else now
+        first_begin = _ceil_hour(start)
+        last_begin = min(_floor_hour(end - timedelta(microseconds=1)),   # last hour starting before end_time
+                         _floor_hour(now) - timedelta(hours=1))         # last hour that has finished
         return first_begin, last_begin
 
     def _get(self, params: dict, max_retries=5):
@@ -220,8 +223,8 @@ class AirNowAPI(object):
 
         raw_df = obs[empty.columns.tolist()] \
             .dropna(subset=[col_name]) \
-            .drop_duplicates(subset=['datasourceId', 'endOfPeriod'], keep='last') \
-            .sort_values(by=['endOfPeriod', 'datasourceId']) \
+            .drop_duplicates(subset=['datasourceId', 'startOfPeriod'], keep='last') \
+            .sort_values(by=['startOfPeriod', 'datasourceId']) \
             .reset_index(drop=True)
         log.info(f'AirNow {parameter} ({"/".join(fields)}): {len(raw_df)} hourly values from {raw_df["datasourceId"].nunique()} site(s)')
         return raw_df, locations_df

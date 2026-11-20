@@ -158,7 +158,7 @@ These follow the same `fetch` -> `clean` -> `merge` stages as the Clarity operat
 * Each EPA site becomes one column, keyed as `datasourceId = AIRNOW_{AQS site code}`
 * EPA sites are merged into `locations.parquet.brotli` with `sourceType = 'AIRNOW'` (Clarity sensors use `CLARITY_NODE`)
 * Only sites within a City of Chicago community area are kept (`AIRNOW_CITY_ONLY=true`, searched within `AIRNOW_BBOX`)
-* AirNow timestamps mark the *start* of the hour; they are shifted to the *end* of the hour to match Clarity's `endOfPeriod` labelling
+* AirNow and Clarity hours are both labeled by the *start* of the hour (UTC); AirNow's `UTC` timestamp is used as `startOfPeriod`
 * AirNow does not provide Clarity-style `qcAssessment` values; missing/invalid values (e.g. `-999`) are discarded instead
 
 #### Operation Stages: `fetch`, `clean`, and `merge`
