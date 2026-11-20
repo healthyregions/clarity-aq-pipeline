@@ -158,6 +158,7 @@ For each operation/metric, there are 3 (somewhat informal) stages that will alwa
     * `temperatureInternalIndividual`
   * This stage expects `qc` values to be provided. We examine these to discard results that are marked as `invalid`
   * Validity Thresholds - averages will be disregarded if they do not meet these minimums
+    * Hours are labeled by `startOfPeriod` floored to the hour (start-of-hour, UTC); days/weeks/etc. are built by flooring those labels
     * `hourly`: >=75% completeness to qualify as a valid hourly average
     * `daily`: >20 valid hours to qualify as a valid daily average
     * `weekly`: >5 valid days to qualify as a valid weekly average
@@ -208,6 +209,12 @@ INFO:config:Successfully updated locations dataset!
   * To optimize loading/querying in the frontend, Parquet file is compressed using [BROTLI compression](https://parquet.apache.org/docs/file-format/data-pages/compression/)
   * This is created during the `--merge` stage (see below)
   * Now sorted with latest hourly row first - optimal for the initial data fetch for the frontend dashboard
+  * All `date` values are UTC. Hourly rows are labeled by the **start** of the hour, matching Clarity's convention
+    (Clarity returns `startOfPeriod`/`endOfPeriod`, e.g. `17:00:00Z`/`18:00:00Z`, and that hour is labeled `17:00`).
+    So hour `17:00` covers 17:00:00–17:59:59 UTC, and day `2026-01-01` is the mean of hours `00:00`–`23:00` UTC
+    (00:00–24:00 UTC), matching Clarity's 24-hour mean.
+    * Note: data generated before this convention was adopted labeled each hour by its **end** (`endOfPeriod`), one hour later,
+      and its days ran 23:00–23:00 UTC. That data must be regenerated.
 ```bash
 INFO:config:Successfully updated parquet file in S3: chicago-aq/current/mean_pm25.parquet
 INFO:config:Successfully updated mean_pm25 dataset!
