@@ -26,10 +26,14 @@ min_obs_per_hour <- as.integer(args[3])
 col_name <- args[4]
 
 # Compute hourly stats for ALL hours
-# Date Format:  2026-01-01 00:00:00, 2026-01-01 01:00:00, etc
+# Date Format:  2026-01-01 00:00:00, 2026-01-01 01:00:00, etc (UTC)
+# Each hour is labeled by its START, matching Clarity's convention: Clarity returns
+# startOfPeriod (inclusive) / endOfPeriod (exclusive), e.g. 17:00:00Z / 18:00:00Z,
+# and that 1-hour mean (17:00:00-17:59:59) is labeled 17:00. Because hours are
+# start-labeled, flooring them to the day below gives UTC days of 00:00-24:00.
 cat("Reading from input file: ",  input_path,"\n", sep = "")
 hourly <- readr::read_csv(input_path) %>%
-  mutate(date = floor_date(endOfPeriod, unit = "hour")) %>%
+  mutate(date = floor_date(startOfPeriod, unit = "hour")) %>%
   group_by(datasourceId, sourceId, date) %>%
   summarise(
     n_valid = sum(!is.na(.data[[col_name]])),
@@ -54,6 +58,7 @@ print(df_hourly)
 # Daily aggregation data using only valid hours
 daily <- df_hourly %>%
   # Date Format:  2026-01-01, 2026-01-02, etc
+  # A day covers the 24 start-labeled hours 00:00..23:00 UTC (i.e. 00:00-24:00 UTC)
   group_by(datasourceId, sourceId, date) %>%
   mutate(date = floor_date(date, unit = "day")) %>%
   summarise(

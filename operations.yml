@@ -73,7 +73,7 @@ clarity_pm25:
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
-      endOfPeriod: 'date'
+      startOfPeriod: 'date'
       #"pm2_5ConcMassNowcast.value": 'clarity_pm25'
       #"pm2_5ConcMassNowcast": 'clarity_pm25'
       #"pm2_5ConcMass1HourMean.value": 'clarity_pm25'
@@ -89,7 +89,7 @@ clarity_no2:
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
-      endOfPeriod: 'date'
+      startOfPeriod: 'date'
       #"no2Conc1HourMean.value": 'clarity_no2'
       #"no2Conc1HourMean": 'clarity_no2'
       #"no2Conc1HourMeanUsEpaAqi.value": 'clarity_no2'
@@ -105,7 +105,7 @@ nowcast_aqi:
   postprocessing:
     renameColumns:
       outputFrequency: 'type'
-      endOfPeriod: 'date'
+      startOfPeriod: 'date'
       #'pm2_5ConcMassNowcastUsEpaAqi.value': 'nowcast_aqi'
       #'pm2_5ConcMassNowcastUsEpaAqi': 'nowcast_aqi'
 
