@@ -26,6 +26,16 @@ CLARITY_API_KEY = os.getenv('CLARITY_API_KEY')
 CLARITY_USE_CONTINUATION_TOKEN = os.getenv('CLARITY_USE_CONTINUATION_TOKEN', 'false').lower() in ('true', '1', 't')
 CLARITY_HOSTNAME = 'https://clarity-data-api.clarity.io/v2'
 
+# Connection details for the US EPA AirNow API (https://docs.airnowapi.org/)
+AIRNOW_API_KEY = os.getenv('AIRNOW_API_KEY')
+AIRNOW_HOSTNAME = os.getenv('AIRNOW_HOSTNAME', 'https://www.airnowapi.org')
+# Bounding box used to query AirNow monitors: minLon,minLat,maxLon,maxLat (default: City of Chicago, slightly padded)
+AIRNOW_BBOX = os.getenv('AIRNOW_BBOX', '-87.95,41.64,-87.52,42.03')
+# If true, discard monitors inside the bounding box that fall outside the City of Chicago community areas
+AIRNOW_CITY_ONLY = os.getenv('AIRNOW_CITY_ONLY', 'true').lower() in ('true', '1', 't')
+# Maximum number of hours requested from AirNow per API call (larger ranges are split into chunks)
+AIRNOW_MAX_HOURS_PER_REQUEST = int(os.getenv('AIRNOW_MAX_HOURS_PER_REQUEST', '72'))
+
 # For monthly report, allow user to specify a previous report
 CLARITY_REPORT_ID = os.getenv('CLARITY_REPORT_ID', '')
 

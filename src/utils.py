@@ -258,6 +258,51 @@ def merge_temporal_averages_to_df(metric_name, op_defn):
     return pd.concat([yearly, seasonal, monthly, weekly, daily, hourly])
 
 
+# Spatially join sensor locations (locationLatitude/locationLongitude) against the Chicago
+# boundaries used by the frontend, adding ward, community, comarea, and zip columns
+def assign_spatial_groups(df: pd.DataFrame):
+    log.info('Assigning groups (ward, community, comarea, zip)...')
+    import geopandas as gpd
+    from shapely.geometry import Point
+
+    # Step 1: Convert the pandas DataFrame into a GeoDataFrame
+    # GeoJSON uses longitude first (X), then latitude (Y)
+    geometry = [Point(xy) for xy in zip(df["locationLongitude"], df["locationLatitude"])]
+    gdf_locations = gpd.GeoDataFrame(df, geometry=geometry, crs="EPSG:4326")
+
+    # Step 2: Load the boundary GeoJSON files
+    # Use same boundaries as the frontend, we can fetch these directly from github
+    # TODO: should we cache this? are we at risk for ratelimiting?
+    path_prefix = 'https://raw.githubusercontent.com/healthyregions/chi-air/refs/heads/main/public/geojson/'
+    gdf_wards = gpd.read_file(f"{path_prefix}/boundaries_wards_2023_.geojson")
+    gdf_communities = gpd.read_file(f"{path_prefix}/community_areas.geojson")
+    gdf_zips = gpd.read_file(f"{path_prefix}/chiZipCodes.geojson")
+
+    # Step 3: Map your specific GeoJSON property names to target column names
+    # Ensure these match the exact keys inside your files' "properties" objects
+    gdf_wards = gdf_wards[["ward", "geometry"]]  # e.g., property is "ward"
+    gdf_communities = gdf_communities[["community", "area_numbe", "geometry"]]  # "community" => name, "area_numbe" => area number
+    gdf_zips = gdf_zips[["zip", "geometry"]]  # e.g., property is "zip"
+    gdf_communities.rename(columns={'area_numbe': 'comarea'}, inplace=True)
+
+    # Step 4: Perform sequential spatial joins (Point-in-Polygon)
+    # "left" ensures you keep all locations even if they fall outside a boundary
+    final_gdf = gpd.sjoin(gdf_locations, gdf_wards, how="left", predicate="within")
+    final_gdf = final_gdf.drop(columns=["index_right"])  # Drop index artifact from first join
+
+    final_gdf = gpd.sjoin(final_gdf, gdf_communities, how="left", predicate="within")
+    final_gdf = final_gdf.drop(columns=["index_right"])
+
+    final_gdf = gpd.sjoin(final_gdf, gdf_zips, how="left", predicate="within")
+    final_gdf = final_gdf.drop(columns=["index_right"])
+
+    # Step 5: Clean up and save back to Parquet
+    # Drop the spatial geometry column to revert to a standard Pandas DataFrame
+    return pd.DataFrame(final_gdf).drop(columns=["geometry"])
+    #final_df = pd.DataFrame(final_gdf).drop(columns=["geometry"])
+    #final_df.to_parquet("locations_with_boundaries.parquet")
+
+
 def redact(redactable: Any, key_name: str = '', limit = 20):
     if isinstance(redactable, dict):
         # Create a deep copy of input object

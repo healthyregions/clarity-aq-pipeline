@@ -3,6 +3,15 @@
 
 # {metric_name}:
 #
+#   source: clarity           # where to fetch data from: 'clarity' (default) or 'airnow' (US EPA AirNow API)
+#
+#   airnowParameter: PM25     # (airnow only) AirNow pollutant to select: PM25 or NO2
+#
+#   airnowFields: [AQI]       # (airnow only) AirNow value field(s) to use, in order of preference:
+#                             #    AQI              - hourly AQI (NowCast-based for PM2.5)
+#                             #    RawConcentration - 1-hour average concentration
+#                             #    Value            - reported concentration (NowCast for PM2.5)
+#
 #   outputFrequency: 'hour'   # data temporal resolution, one of 'day', 'hour', or 'minute'
 #
 #   metricSelect: 'only :no2' # limits metrics returned. if not present, all metrics will be returned.
@@ -108,6 +117,55 @@ nowcast_aqi:
       endOfPeriod: 'date'
       #'pm2_5ConcMassNowcastUsEpaAqi.value': 'nowcast_aqi'
       #'pm2_5ConcMassNowcastUsEpaAqi': 'nowcast_aqi'
+
+
+# US EPA regulatory monitors within the City of Chicago, fetched from the AirNow API
+# These produce Parquet files with the same layout as the Clarity operations above, with one
+# column per EPA site (datasourceId = AIRNOW_{AQS site code}). Sites are merged into
+# locations.parquet.brotli with sourceType = 'AIRNOW'.
+
+# Comparable to nowcast_aqi (pm2_5ConcMassNowcastUsEpaAqi)
+airnow_aqi:
+  source: airnow
+  outputFrequency: hour
+  airnowParameter: PM25
+  airnowFields: [AQI]
+  cleaningScript: ./scripts/clarity_qa_qc.R
+  colName: 'pm25NowcastAqi.value'
+  postprocessing:
+    renameColumns:
+      outputFrequency: 'type'
+      endOfPeriod: 'date'
+
+
+# Comparable to clarity_pm25 (pm2_5ConcMass1HourMean, ug/m3)
+# NOTE: no fallback to Value here - for PM2.5 that is a NowCast concentration, not a 1-hour mean
+airnow_pm25:
+  source: airnow
+  outputFrequency: hour
+  airnowParameter: PM25
+  airnowFields: [RawConcentration]
+  cleaningScript: ./scripts/clarity_qa_qc.R
+  colName: 'pm25Conc1HourMean.value'
+  postprocessing:
+    renameColumns:
+      outputFrequency: 'type'
+      endOfPeriod: 'date'
+
+
+# Comparable to clarity_no2 (no2Conc1HourMean, ppb)
+# NO2 has no NowCast, so Value is the 1-hour concentration and is a safe fallback
+airnow_no2:
+  source: airnow
+  outputFrequency: hour
+  airnowParameter: NO2
+  airnowFields: [RawConcentration, Value]
+  cleaningScript: ./scripts/clarity_qa_qc.R
+  colName: 'no2Conc1HourMean.value'
+  postprocessing:
+    renameColumns:
+      outputFrequency: 'type'
+      endOfPeriod: 'date'
 
 
 # Future: ... define new operations for Black Carbon ...

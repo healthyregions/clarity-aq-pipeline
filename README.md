@@ -54,7 +54,7 @@ git clone https://github.com/healthyregions/clarity-aq-pipeline
 cd clarity-aq-pipeline/
 ```
 
-First, copy `.env.example` to `.env` and edit the `CLARITY_API_KEY`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY`:
+First, copy `.env.example` to `.env` and edit the `CLARITY_API_KEY`, `S3_ACCESS_KEY`, and `S3_SECRET_KEY` (and `AIRNOW_API_KEY` for the EPA AirNow operations):
 ```bash
 cp .env.example .env
 vi .env
@@ -142,6 +142,24 @@ There are currently 3 `operations` (parameters / indicators) defined for this pi
 * ~~`mean_pm25`~~ - per-minute PM2.5 data cleaned via R script from UIC, aggregated into hourly data (currently awaiting a new cleanup script)
 * `clarity_pm25` - per-hour PM2.5 data cleaned via Clarity's internal processes
 * `clarity_no2` - per-hour NO2 data cleaned via Clarity's internal processes
+
+There are also 3 operations that fetch the same metrics from **US EPA regulatory monitors** within the City of Chicago, using the [AirNow API](https://docs.airnowapi.org/) (requires `AIRNOW_API_KEY`):
+* `airnow_aqi` - per-hour PM2.5 AQI (NowCast) from EPA monitors, for comparison with `nowcast_aqi`
+* `airnow_pm25` - per-hour PM2.5 concentration (1-hour average, μg/m³), for comparison with `clarity_pm25`
+* `airnow_no2` - per-hour NO2 concentration (ppb), for comparison with `clarity_no2`
+
+```bash
+python ./main.py --recent --op airnow_aqi airnow_pm25 airnow_no2
+python ./main.py --historical --daily --fetch --op airnow_aqi airnow_pm25 airnow_no2
+```
+
+These follow the same `fetch` -> `clean` -> `merge` stages as the Clarity operations and produce Parquet files in exactly the same format (`airnow_*.parquet.brotli` + `airnow_*.index.json`), so the frontend can switch between sensor networks by swapping the metric file name. Notes:
+* One AirNow request (per 72 hours of data) is shared by all `airnow_*` operations in a single run
+* Each EPA site becomes one column, keyed as `datasourceId = AIRNOW_{AQS site code}`
+* EPA sites are merged into `locations.parquet.brotli` with `sourceType = 'AIRNOW'` (Clarity sensors use `CLARITY_NODE`)
+* Only sites within a City of Chicago community area are kept (`AIRNOW_CITY_ONLY=true`, searched within `AIRNOW_BBOX`)
+* AirNow timestamps mark the *start* of the hour; they are shifted to the *end* of the hour to match Clarity's `endOfPeriod` labelling
+* AirNow does not provide Clarity-style `qcAssessment` values; missing/invalid values (e.g. `-999`) are discarded instead
 
 #### Operation Stages: `fetch`, `clean`, and `merge`
 For each operation/metric, there are 3 (somewhat informal) stages that will always be run in a predetermined order:
@@ -231,6 +249,9 @@ These Parquet files are publicly available for download in our S3 bucket:
 * [nowcast_aqi.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/nowcast_aqi.parquet.brotli)
 * [clarity_pm25.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/clarity_pm25.parquet.brotli)
 * [clarity_no2.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/clarity_no2.parquet.brotli)
+* [airnow_aqi.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/airnow_aqi.parquet.brotli)
+* [airnow_pm25.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/airnow_pm25.parquet.brotli)
+* [airnow_no2.parquet.brotli](https://s3.us-east-2.amazonaws.com/chicago-aq/current/airnow_no2.parquet.brotli)
 
 
 ## Local Testing Using MinIO
@@ -257,6 +278,8 @@ Then run the same pipeline command that you would normally run.
 
 ## GitHub Actions (Production)
 The production process is run automatically on a schedule, but it can be triggered manually for early testing as well.
+
+Each scheduled workflow also runs the `airnow_*` operations in a second step. That step is skipped unless an `AIRNOW_API_KEY` repository secret is configured.
 
 Navigate to https://github.com/healthyregions/clarity-aq-pipeline/actions
 
